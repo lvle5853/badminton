@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>羽毛球对阵原型</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar">
+        <div>
+          <h1>羽毛球对阵</h1>
+          <p>录入 4-13 人，自动生成尽量均衡的双打赛程，边打边记分。</p>
+        </div>
+        <button id="sampleBtn" class="secondary-button" type="button">填入示例</button>
+      </section>
+
+      <section class="layout">
+        <aside class="panel roster-panel">
+          <div class="panel-head">
+            <h2>参赛人员</h2>
+            <span id="playerCount">0/13</span>
+          </div>
+
+          <form id="playerForm" class="player-form">
+            <input id="nameInput" type="text" maxlength="12" placeholder="姓名" required>
+            <select id="genderInput" aria-label="性别">
+              <option value="M">男</option>
+              <option value="F">女</option>
+            </select>
+            <input id="levelInput" type="number" min="1" max="9" value="3" aria-label="等级">
+            <button type="submit">添加</button>
+          </form>
+
+          <div id="playerList" class="player-list"></div>
+
+          <div class="settings">
+            <label for="matchCountInput">比赛场数</label>
+            <input id="matchCountInput" type="number" min="1" max="30" value="6">
+            <button id="generateBtn" type="button">生成赛程</button>
+          </div>
+          <p id="scheduleNote" class="note"></p>
+        </aside>
+
+        <section class="main-panel">
+          <div class="tabs" role="tablist">
+            <button class="tab active" data-view="schedule" type="button">赛程</button>
+            <button class="tab" data-view="ranking" type="button">排名</button>
+            <button class="tab" data-view="rules" type="button">规则</button>
+          </div>
+
+          <div id="scheduleView" class="view active">
+            <div id="scheduleList" class="schedule-list empty-state">
+              添加人员后生成赛程。
+            </div>
+          </div>
+
+          <div id="rankingView" class="view">
+            <div id="rankingList" class="ranking-list empty-state">
+              完成计分后查看排名。
+            </div>
+          </div>
+
+          <div id="rulesView" class="view">
+            <div class="rules-grid">
+              <div>
+                <h3>计分</h3>
+                <p>一局 21 分，胜者每人积 2 分，负者 0 分；排名先看积分，再看净胜分。</p>
+              </div>
+              <div>
+                <h3>排赛</h3>
+                <p>优先避免连续打 3 场、连续休 2 场，并尽量让搭档不重复、实力接近。</p>
+              </div>
+              <div>
+                <h3>性别</h3>
+                <p>不安排男双对女双，也不安排女双对混双；男双对混双、混双对混双可以出现。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
