@@ -12,6 +12,7 @@ const els = {
   playerList: document.querySelector("#playerList"),
   playerCount: document.querySelector("#playerCount"),
   matchCountInput: document.querySelector("#matchCountInput"),
+  repeatLimitInput: document.querySelector("#repeatLimitInput"),
   generateBtn: document.querySelector("#generateBtn"),
   sampleBtn: document.querySelector("#sampleBtn"),
   scheduleList: document.querySelector("#scheduleList"),
@@ -25,12 +26,57 @@ const els = {
   },
 };
 
+const STORAGE_KEY = "badminton-scheduler-state-v1";
+
 function uid() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function saveAppState() {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        players: state.players,
+        schedule: state.schedule,
+        scores: state.scores,
+        settings: {
+          matchCount: els.matchCountInput.value,
+          repeatLimit: els.repeatLimitInput.value,
+        },
+      })
+    );
+  } catch (error) {
+    console.warn("保存本地数据失败", error);
+  }
+}
+
+function loadAppState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    state.players = Array.isArray(data.players) ? data.players : [];
+    state.schedule = Array.isArray(data.schedule) ? data.schedule : [];
+    state.scores = data.scores && typeof data.scores === "object" ? data.scores : {};
+    if (data.settings?.matchCount) els.matchCountInput.value = data.settings.matchCount;
+    if (data.settings?.repeatLimit) els.repeatLimitInput.value = data.settings.repeatLimit;
+  } catch (error) {
+    console.warn("读取本地数据失败", error);
+  }
+}
+
 function genderLabel(gender) {
   return gender === "M" ? "男" : "女";
+}
+
+function formatLevel(level) {
+  return Number.isInteger(level) ? String(level) : level.toFixed(1);
+}
+
+function normalizeLevel(level) {
+  const clamped = Math.max(1, Math.min(9, level));
+  return Math.round(clamped * 2) / 2;
 }
 
 function teamType(team) {
@@ -55,6 +101,16 @@ function matchKey(match) {
   ].sort().join("::");
 }
 
+function matchTypeKey(match) {
+  return [teamType(match.a), teamType(match.b)].sort().join("-");
+}
+
+function matchTypeCost(match) {
+  const typeKey = matchTypeKey(match);
+  if (typeKey === "混双-男双") return -40;
+  return 0;
+}
+
 function validGenderMatch(teamA, teamB) {
   const a = teamType(teamA);
   const b = teamType(teamB);
@@ -75,7 +131,7 @@ function renderPlayers() {
       <div class="player-row">
         <strong>${escapeHtml(player.name)}</strong>
         <span class="badge">${genderLabel(player.gender)}</span>
-        <span class="badge">${player.level}级</span>
+        <span class="badge">${formatLevel(player.level)}级</span>
         <button class="remove-btn" type="button" data-remove="${player.id}" aria-label="删除 ${escapeHtml(player.name)}">×</button>
       </div>
     `)
@@ -99,6 +155,7 @@ function addPlayer(player) {
   state.players.push(player);
   state.schedule = [];
   state.scores = {};
+  saveAppState();
   renderAll();
 }
 
@@ -106,6 +163,7 @@ function removePlayer(id) {
   state.players = state.players.filter((player) => player.id !== id);
   state.schedule = [];
   state.scores = {};
+  saveAppState();
   renderAll();
 }
 
@@ -143,8 +201,9 @@ function enumerateMatches(players) {
       matches.push({
         ...candidate,
         key,
+        typeKey: matchTypeKey(candidate),
         players: [...a, ...b],
-        baseCost: baseMatchCost(a, b),
+        baseCost: baseMatchCost(a, b) + matchTypeCost(candidate),
       });
     });
   });
@@ -154,7 +213,11 @@ function enumerateMatches(players) {
 
 function baseMatchCost(a, b) {
   const diff = Math.abs(teamLevel(a) - teamLevel(b));
+  const balanceCost = diff <= 1 ? diff * 34 : diff * diff * 110 + diff * 35;
   const teamSpread = Math.abs(a[0].level - a[1].level) + Math.abs(b[0].level - b[1].level);
+  const sameLevelTeams =
+    Number(a[0].level === a[1].level) +
+    Number(b[0].level === b[1].level);
   const repeatedStrongPair =
     Number(a[0].level === a[1].level && a[0].level >= 4) +
     Number(b[0].level === b[1].level && b[0].level >= 4);
@@ -162,7 +225,7 @@ function baseMatchCost(a, b) {
     Number(a[0].level === a[1].level && a[0].level <= 3) +
     Number(b[0].level === b[1].level && b[0].level <= 3);
 
-  return diff * 18 - teamSpread * 2 + repeatedStrongPair * 12 + repeatedWeakPair * 8;
+  return balanceCost - teamSpread * 3 + sameLevelTeams * 16 + repeatedStrongPair * 24 + repeatedWeakPair * 18;
 }
 
 function createInitialStats(players) {
@@ -194,9 +257,13 @@ function cloneStats(stats) {
   return next;
 }
 
-function scoreCandidate(match, stats, selectedKeys, gameIndex, totalGames, playerCount) {
+function scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, gameIndex, totalGames, playerCount, repeatLimit) {
   let cost = match.baseCost + Math.random() * 4;
-  if (selectedKeys.has(match.key)) cost += 42;
+  const selectedCount = selectedCounts.get(match.key) || 0;
+  const selectedTypeCount = selectedTypeCounts.get(match.typeKey) || 0;
+  if (selectedCount >= repeatLimit) cost += 5000 + selectedCount * 1000;
+  else if (selectedCount > 0) cost += selectedCount * 180;
+  cost += selectedTypeCount * 28;
 
   const playing = new Set(match.players.map((player) => player.id));
   match.players.forEach((player) => {
@@ -212,8 +279,8 @@ function scoreCandidate(match, stats, selectedKeys, gameIndex, totalGames, playe
 
   const pairA = pairKey(match.a[0], match.a[1]);
   const pairB = pairKey(match.b[0], match.b[1]);
-  if (stats[match.a[0].id].partners.has(match.a[1].id)) cost += 130;
-  if (stats[match.b[0].id].partners.has(match.b[1].id)) cost += 130;
+  if (stats[match.a[0].id].partners.has(match.a[1].id)) cost += 42;
+  if (stats[match.b[0].id].partners.has(match.b[1].id)) cost += 42;
 
   const averageGames = ((gameIndex + 1) * 4) / playerCount;
   match.players.forEach((player) => {
@@ -259,9 +326,11 @@ function applyMatchToStats(match, stats, players) {
   });
 }
 
-function schedulePenalty(schedule, players) {
+function schedulePenalty(schedule, players, repeatLimit) {
   const history = {};
   const partnerUse = {};
+  const matchUse = {};
+  const matchTypeUse = {};
   players.forEach((player) => {
     history[player.id] = [];
   });
@@ -273,6 +342,8 @@ function schedulePenalty(schedule, players) {
       const key = pairKey(team[0], team[1]);
       partnerUse[key] = (partnerUse[key] || 0) + 1;
     });
+    matchUse[match.key] = (matchUse[match.key] || 0) + 1;
+    matchTypeUse[match.typeKey] = (matchTypeUse[match.typeKey] || 0) + 1;
   });
 
   let penalty = schedule.reduce((sum, match) => sum + match.baseCost, 0);
@@ -285,12 +356,19 @@ function schedulePenalty(schedule, players) {
     });
   });
   Object.values(partnerUse).forEach((count) => {
-    if (count > 1) penalty += (count - 1) * 160;
+    if (count > 1) penalty += (count - 1) * 48;
+  });
+  Object.values(matchUse).forEach((count) => {
+    if (count > repeatLimit) penalty += (count - repeatLimit) * 5000;
+    else if (count > 1) penalty += (count - 1) * 180;
+  });
+  Object.values(matchTypeUse).forEach((count) => {
+    penalty += count * count * 8;
   });
   return penalty;
 }
 
-function generateSchedule(players, matchCount) {
+function generateSchedule(players, matchCount, repeatLimit = 2) {
   const candidates = enumerateMatches(players);
   if (!candidates.length) {
     return { schedule: [], note: "当前性别组合下没有合法对阵，请调整人员。" };
@@ -301,14 +379,15 @@ function generateSchedule(players, matchCount) {
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const stats = createInitialStats(players);
-    const selectedKeys = new Set();
+    const selectedCounts = new Map();
+    const selectedTypeCounts = new Map();
     const schedule = [];
 
     for (let i = 0; i < matchCount; i += 1) {
       const ranked = candidates
         .map((match) => ({
           match,
-          cost: scoreCandidate(match, stats, selectedKeys, i, matchCount, players.length),
+          cost: scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, i, matchCount, players.length, repeatLimit),
         }))
         .sort((x, y) => x.cost - y.cost);
       const pickIndex = Math.min(ranked.length - 1, Math.floor(Math.random() * 3));
@@ -321,17 +400,18 @@ function generateSchedule(players, matchCount) {
         players: [...chosen.players],
       };
       schedule.push(copy);
-      selectedKeys.add(chosen.key);
+      selectedCounts.set(chosen.key, (selectedCounts.get(chosen.key) || 0) + 1);
+      selectedTypeCounts.set(chosen.typeKey, (selectedTypeCounts.get(chosen.typeKey) || 0) + 1);
       applyMatchToStats(chosen, stats, players);
     }
 
-    const penalty = schedulePenalty(schedule, players);
+    const penalty = schedulePenalty(schedule, players, repeatLimit);
     if (!best || penalty < best.penalty) {
       best = { schedule, penalty };
     }
   }
 
-  const hardWarnings = collectWarnings(best.schedule, players);
+  const hardWarnings = collectWarnings(best.schedule, players, repeatLimit);
   return {
     schedule: best.schedule,
     note: hardWarnings.length
@@ -340,9 +420,10 @@ function generateSchedule(players, matchCount) {
   };
 }
 
-function collectWarnings(schedule, players) {
+function collectWarnings(schedule, players, repeatLimit = 2) {
   const history = {};
   const partnerUse = {};
+  const matchUse = {};
   players.forEach((player) => {
     history[player.id] = [];
   });
@@ -353,6 +434,7 @@ function collectWarnings(schedule, players) {
       const key = pairKey(team[0], team[1]);
       partnerUse[key] = (partnerUse[key] || 0) + 1;
     });
+    matchUse[match.key] = (matchUse[match.key] || 0) + 1;
   });
 
   const warnings = [];
@@ -364,6 +446,9 @@ function collectWarnings(schedule, players) {
   }
   if (Object.values(partnerUse).some((count) => count > 1)) {
     warnings.push("部分搭档重复");
+  }
+  if (Object.values(matchUse).some((count) => count > repeatLimit)) {
+    warnings.push(`个别完整对阵超过 ${repeatLimit} 次`);
   }
   return warnings;
 }
@@ -383,7 +468,7 @@ function renderSchedule() {
         <article class="match-card">
           <div class="match-head">
             <span>第 ${index + 1} 场</span>
-            <span>${teamType(match.a)} vs ${teamType(match.b)} · 实力 ${teamLevel(match.a)}:${teamLevel(match.b)}</span>
+            <span>${teamType(match.a)} vs ${teamType(match.b)} · 实力 ${formatLevel(teamLevel(match.a))}:${formatLevel(teamLevel(match.b))}</span>
           </div>
           <div class="match-body">
             ${renderTeam(match.a)}
@@ -404,8 +489,8 @@ function renderSchedule() {
 function renderTeam(team) {
   return `
     <div class="team">
-      <div class="team-name">${team.map((player) => escapeHtml(player.name)).join(" / ")}</div>
-      <div class="team-meta">${team.map((player) => `${genderLabel(player.gender)} ${player.level}级`).join(" · ")}</div>
+      <div class="team-name">${team.map((player) => escapeHtml(player.name)).join("/")}</div>
+      <div class="team-meta">${team.map((player) => `${genderLabel(player.gender)} ${formatLevel(player.level)}级`).join(" · ")}</div>
     </div>
   `;
 }
@@ -417,6 +502,8 @@ function calculateRanking() {
     diff: 0,
     scored: 0,
     games: 0,
+    wins: 0,
+    losses: 0,
   }));
   const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
 
@@ -432,11 +519,13 @@ function calculateRanking() {
     });
     match.a.forEach((player) => {
       byId[player.id].points += aWin ? 2 : 0;
+      byId[player.id][aWin ? "wins" : "losses"] += 1;
       byId[player.id].diff += aScore - bScore;
       byId[player.id].scored += aScore;
     });
     match.b.forEach((player) => {
       byId[player.id].points += aWin ? 0 : 2;
+      byId[player.id][aWin ? "losses" : "wins"] += 1;
       byId[player.id].diff += bScore - aScore;
       byId[player.id].scored += bScore;
     });
@@ -462,13 +551,14 @@ function renderRanking() {
   els.rankingList.className = "ranking-list";
   els.rankingList.innerHTML = `
     <div class="rank-row header">
-      <span>名次</span><span>球员</span><span>积分</span><span>净胜</span><span>得分</span><span>场次</span>
+      <span>名次</span><span>球员</span><span>积分</span><span>胜负</span><span>净胜</span><span>得分</span><span>场次</span>
     </div>
     ${rows.map((row, index) => `
       <div class="rank-row">
         <span>${index + 1}</span>
-        <strong>${escapeHtml(row.name)} <span class="badge">${genderLabel(row.gender)} ${row.level}级</span></strong>
+        <strong>${escapeHtml(row.name)} <span class="badge">${genderLabel(row.gender)} ${formatLevel(row.level)}级</span></strong>
         <span>${row.points}</span>
+        <span>${row.wins}胜${row.losses}负</span>
         <span>${row.diff > 0 ? "+" : ""}${row.diff}</span>
         <span>${row.scored}</span>
         <span>${row.games}</span>
@@ -496,7 +586,7 @@ els.playerForm.addEventListener("submit", (event) => {
     id: uid(),
     name,
     gender: els.genderInput.value,
-    level: Math.max(1, Math.min(9, level)),
+    level: normalizeLevel(level),
   });
   els.nameInput.value = "";
   els.nameInput.focus();
@@ -508,6 +598,9 @@ els.playerList.addEventListener("click", (event) => {
   removePlayer(button.dataset.remove);
 });
 
+els.matchCountInput.addEventListener("change", saveAppState);
+els.repeatLimitInput.addEventListener("change", saveAppState);
+
 els.generateBtn.addEventListener("click", () => {
   const count = state.players.length;
   if (count < 4 || count > 13) {
@@ -516,9 +609,11 @@ els.generateBtn.addEventListener("click", () => {
   }
 
   const matchCount = Math.max(1, Math.min(30, Number(els.matchCountInput.value) || 1));
-  const result = generateSchedule(state.players, matchCount);
+  const repeatLimit = Math.max(1, Math.min(2, Number(els.repeatLimitInput.value) || 2));
+  const result = generateSchedule(state.players, matchCount, repeatLimit);
   state.schedule = result.schedule;
   state.scores = {};
+  saveAppState();
   showNote(result.note);
   renderAll();
 });
@@ -529,6 +624,7 @@ els.scheduleList.addEventListener("input", (event) => {
   const index = input.dataset.score;
   state.scores[index] ||= { a: "", b: "" };
   state.scores[index][input.dataset.side] = input.value;
+  saveAppState();
   renderRanking();
 });
 
@@ -536,6 +632,7 @@ els.scheduleList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-clear-score]");
   if (!button) return;
   delete state.scores[button.dataset.clearScore];
+  saveAppState();
   renderSchedule();
   renderRanking();
 });
@@ -552,6 +649,7 @@ els.sampleBtn.addEventListener("click", () => {
   els.matchCountInput.value = 9;
   state.schedule = [];
   state.scores = {};
+  saveAppState();
   showNote("已填入 6 人示例，可以直接生成赛程。");
   renderAll();
 });
@@ -565,4 +663,11 @@ els.tabs.forEach((tab) => {
   });
 });
 
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch((error) => {
+    console.warn("离线缓存注册失败", error);
+  });
+}
+
+loadAppState();
 renderAll();

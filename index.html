@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>羽毛球对阵原型</title>
+    <meta name="theme-color" content="#0f766e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="羽毛球对阵">
+    <link rel="manifest" href="./manifest.webmanifest">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
@@ -29,15 +33,42 @@
               <option value="M">男</option>
               <option value="F">女</option>
             </select>
-            <input id="levelInput" type="number" min="1" max="9" value="3" aria-label="等级">
+            <select id="levelInput" aria-label="等级">
+              <option value="1">1级</option>
+              <option value="1.5">1.5级</option>
+              <option value="2">2级</option>
+              <option value="2.5">2.5级</option>
+              <option value="3" selected>3级</option>
+              <option value="3.5">3.5级</option>
+              <option value="4">4级</option>
+              <option value="4.5">4.5级</option>
+              <option value="5">5级</option>
+              <option value="5.5">5.5级</option>
+              <option value="6">6级</option>
+              <option value="6.5">6.5级</option>
+              <option value="7">7级</option>
+              <option value="7.5">7.5级</option>
+              <option value="8">8级</option>
+              <option value="8.5">8.5级</option>
+              <option value="9">9级</option>
+            </select>
             <button type="submit">添加</button>
           </form>
 
           <div id="playerList" class="player-list"></div>
 
           <div class="settings">
-            <label for="matchCountInput">比赛场数</label>
-            <input id="matchCountInput" type="number" min="1" max="30" value="6">
+            <div class="setting-field">
+              <label for="matchCountInput">比赛场数</label>
+              <input id="matchCountInput" type="number" min="1" max="30" value="6">
+            </div>
+            <div class="setting-field">
+              <label for="repeatLimitInput">同一对阵最多</label>
+              <select id="repeatLimitInput">
+                <option value="2" selected>2次</option>
+                <option value="1">1次</option>
+              </select>
+            </div>
             <button id="generateBtn" type="button">生成赛程</button>
           </div>
           <p id="scheduleNote" class="note"></p>
