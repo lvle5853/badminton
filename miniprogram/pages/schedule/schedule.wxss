@@ -1,0 +1,138 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+.match-card {
+  background: #ffffff;
+  border: 1rpx solid #d9dfda;
+  border-radius: 16rpx;
+  overflow: hidden;
+  margin-bottom: 20rpx;
+}
+
+.match-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 24rpx;
+  background: #fbfcfa;
+  border-bottom: 1rpx solid #d9dfda;
+  gap: 12rpx;
+}
+
+.match-num {
+  color: #1d2824;
+  font-size: 26rpx;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.match-meta {
+  color: #64716c;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-body {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  gap: 16rpx;
+}
+
+.team {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 12rpx;
+}
+
+.team-left {
+  justify-content: flex-end;
+  text-align: center;
+}
+
+.team-right {
+  justify-content: flex-start;
+  text-align: center;
+}
+
+.team-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+  min-width: 0;
+}
+
+.team-name {
+  font-weight: 800;
+  font-size: 28rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.team-level {
+  color: #64716c;
+  font-size: 20rpx;
+  white-space: nowrap;
+}
+
+.versus {
+  color: #b78103;
+  font-weight: 900;
+  font-size: 28rpx;
+  flex-shrink: 0;
+}
+
+.score-row {
+  display: flex;
+  gap: 12rpx;
+  padding: 0 24rpx 20rpx;
+  align-items: center;
+}
+
+.score-input {
+  flex: 1;
+  height: 72rpx;
+  border: 1rpx solid #d9dfda;
+  border-radius: 12rpx;
+  text-align: center;
+  font-size: 28rpx;
+  background: #fff;
+}
+
+.btn-clear {
+  flex-shrink: 0;
+  height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 24rpx;
+  background: #f3eeee;
+  color: #b42318;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.btn-clear::after {
+  border: none;
+}
+
+.action-bar {
+  margin-top: 16rpx;
+}
+
+.note {
+  margin-top: 20rpx;
+  color: #64716c;
+  font-size: 24rpx;
+  text-align: center;
+}

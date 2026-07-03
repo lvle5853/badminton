@@ -1,0 +1,82 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+.rank-header {
+  display: flex;
+  align-items: center;
+  background: #fbfcfa;
+  border: 1rpx solid #d9dfda;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.rank-header text {
+  color: #64716c;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.rh-rank {
+  width: 60rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rh-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.rh-stat {
+  width: 80rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1rpx solid #d9dfda;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 10rpx;
+}
+
+.rr-rank {
+  width: 60rpx;
+  text-align: center;
+  font-weight: 800;
+  font-size: 30rpx;
+  flex-shrink: 0;
+}
+
+.rr-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-wrap: wrap;
+}
+
+.rr-player-name {
+  font-weight: 700;
+  font-size: 28rpx;
+}
+
+.rr-stat {
+  width: 80rpx;
+  text-align: center;
+  font-size: 24rpx;
+  flex-shrink: 0;
+}
+
+.rr-points {
+  font-weight: 800;
+  color: #0f766e;
+  font-size: 28rpx;
+}

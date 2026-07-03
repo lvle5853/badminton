@@ -1,0 +1,30 @@
+<view class="page">
+  <view wx:if="{{rows.length === 0}}" class="empty-state">
+    <text>完成计分后查看排名</text>
+  </view>
+
+  <view wx:if="{{rows.length > 0}}">
+    <!-- Header Row -->
+    <view class="rank-header">
+      <text class="rh-rank">名次</text>
+      <text class="rh-name">球员</text>
+      <text class="rh-stat">积分</text>
+      <text class="rh-stat">胜负</text>
+      <text class="rh-stat">净胜</text>
+      <text class="rh-stat">场次</text>
+    </view>
+
+    <!-- Data Rows -->
+    <view wx:for="{{rows}}" wx:key="rank" class="rank-row">
+      <text class="rr-rank">{{item.rank}}</text>
+      <view class="rr-name">
+        <text class="rr-player-name">{{item.name}}</text>
+        <text class="badge">{{item.gender}} {{item.level}}</text>
+      </view>
+      <text class="rr-stat rr-points">{{item.points}}</text>
+      <text class="rr-stat">{{item.winLoss}}</text>
+      <text class="rr-stat">{{item.diff}}</text>
+      <text class="rr-stat">{{item.games}}</text>
+    </view>
+  </view>
+</view>

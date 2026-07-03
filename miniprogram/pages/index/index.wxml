@@ -1,0 +1,95 @@
+<view class="page">
+  <!-- Header -->
+  <view class="header">
+    <text class="header-title">羽毛球对阵</text>
+    <text class="header-desc">录入 4-13 人，自动生成均衡双打赛程</text>
+  </view>
+
+  <!-- Room Panel -->
+  <view wx:if="{{!roomCode}}" class="card room-card">
+    <view class="section-title">多人同步</view>
+    <text class="room-hint">创建房间后分享房间号，朋友输入房间号加入即可实时同步比分</text>
+    <view class="room-row">
+      <input class="form-input room-input" placeholder="输入房间号加入" type="number" maxlength="4"
+        value="{{joinCodeInput}}" bindinput="onJoinCodeInput" bindconfirm="onJoinRoom" />
+      <button class="btn-join" bindtap="onJoinRoom">加入</button>
+    </view>
+    <button class="btn-create" bindtap="onCreateRoom">创建房间</button>
+  </view>
+
+  <view wx:if="{{roomCode}}" class="room-bar">
+    <view class="room-bar-left">
+      <text class="room-bar-label">房间</text>
+      <text class="room-bar-code" bindtap="onCopyCode">{{roomCode}}</text>
+      <text class="room-bar-tip">（点击复制）</text>
+    </view>
+    <text class="room-bar-leave" bindtap="onLeaveRoom">离开</text>
+  </view>
+
+  <!-- Add Player Form -->
+  <view class="card">
+    <view class="section-title">添加人员</view>
+    <view class="form-grid">
+      <input class="form-input" placeholder="姓名" maxlength="12"
+        value="{{nameInput}}" bindinput="onNameInput"
+        bindconfirm="addPlayer" />
+      <view class="form-row">
+        <view class="form-item">
+          <picker bindchange="onGenderChange" value="{{genderIndex}}" range="{{GENDER_OPTIONS}}">
+            <view class="picker-value">{{GENDER_OPTIONS[genderIndex]}}</view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <picker bindchange="onLevelChange" value="{{levelIndex}}" range="{{LEVEL_OPTIONS}}">
+            <view class="picker-value">{{LEVEL_OPTIONS[levelIndex]}}</view>
+          </picker>
+        </view>
+      </view>
+      <button class="btn-primary" bindtap="addPlayer">添加</button>
+    </view>
+  </view>
+
+  <!-- Player List -->
+  <view class="card">
+    <view class="card-header">
+      <text class="section-title">参赛人员</text>
+      <text class="count-badge">{{playerCount}}/13</text>
+    </view>
+
+    <view wx:if="{{playerCount === 0}}" class="empty-hint">
+      还没有参赛人员
+    </view>
+
+    <view wx:for="{{players}}" wx:key="id" class="player-row" wx:if="{{playerCount > 0}}">
+      <view class="player-info">
+        <text class="player-name">{{item.name}}</text>
+        <text class="badge">{{item.genderLabel}}</text>
+        <text class="badge">{{item.levelLabel}}</text>
+      </view>
+      <button class="btn-danger-sm" data-id="{{item.id}}" bindtap="removePlayer">×</button>
+    </view>
+  </view>
+
+  <!-- Settings -->
+  <view class="card">
+    <view class="section-title">赛程设置</view>
+    <view class="settings-grid">
+      <view class="setting-item">
+        <text class="form-label">比赛场数</text>
+        <picker bindchange="onMatchCountChange" value="{{matchCountIndex}}" range="{{MATCH_COUNT_OPTIONS}}">
+          <view class="picker-value">{{MATCH_COUNT_OPTIONS[matchCountIndex]}}</view>
+        </picker>
+      </view>
+      <view class="setting-item">
+        <text class="form-label">同一对阵最多</text>
+        <picker bindchange="onRepeatLimitChange" value="{{repeatLimitIndex}}" range="{{REPEAT_LIMIT_OPTIONS}}">
+          <view class="picker-value">{{REPEAT_LIMIT_OPTIONS[repeatLimitIndex]}}</view>
+        </picker>
+      </view>
+    </view>
+    <button class="btn-primary" style="margin-top:24rpx" bindtap="generateSchedule">生成赛程</button>
+  </view>
+
+  <!-- Sample Data -->
+  <button class="btn-secondary" style="margin-top:0" bindtap="loadSample">填入示例数据</button>
+</view>

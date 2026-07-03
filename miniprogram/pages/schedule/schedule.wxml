@@ -1,0 +1,49 @@
+<view class="page">
+  <view wx:if="{{matches.length === 0}}" class="empty-state">
+    <text>添加人员后生成赛程</text>
+  </view>
+
+  <block wx:for="{{matches}}" wx:key="index">
+    <view class="match-card">
+      <!-- Match Header -->
+      <view class="match-head">
+        <text class="match-num">第 {{item.num}} 场</text>
+        <text class="match-meta">{{item.typeLabel}} · {{item.levelLabel}}</text>
+      </view>
+
+      <!-- Match Body -->
+      <view class="match-body">
+        <view class="team team-left">
+          <view class="team-player" wx:for="{{item.teamA}}" wx:key="name">
+            <text class="team-name">{{item.name}}</text>
+            <text class="team-level">{{item.level}}</text>
+          </view>
+        </view>
+        <text class="versus">VS</text>
+        <view class="team team-right">
+          <view class="team-player" wx:for="{{item.teamB}}" wx:key="name">
+            <text class="team-name">{{item.name}}</text>
+            <text class="team-level">{{item.level}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- Score Row -->
+      <view class="score-row">
+        <input class="score-input" type="number" placeholder="左队"
+          value="{{item.scoreA}}" data-index="{{item.index}}" data-side="a"
+          bindinput="onScoreInput" />
+        <input class="score-input" type="number" placeholder="右队"
+          value="{{item.scoreB}}" data-index="{{item.index}}" data-side="b"
+          bindinput="onScoreInput" />
+        <button class="btn-clear" data-index="{{item.index}}" bindtap="clearScore">清空</button>
+      </view>
+    </view>
+  </block>
+
+  <view wx:if="{{matches.length > 0}}" class="action-bar">
+    <button class="btn-primary" bindtap="goToRanking">查看排名</button>
+  </view>
+
+  <view wx:if="{{note}}" class="note">{{note}}</view>
+</view>

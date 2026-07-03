@@ -1,0 +1,26 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+.rule-card {
+  background: #ffffff;
+  border: 1rpx solid #d9dfda;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.rule-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 800;
+  margin-bottom: 12rpx;
+}
+
+.rule-text {
+  display: block;
+  color: #64716c;
+  font-size: 26rpx;
+  line-height: 1.8;
+}

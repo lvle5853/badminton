@@ -1,0 +1,47 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/schedule/schedule",
+    "pages/ranking/ranking",
+    "pages/rules/rules"
+  ],
+  "window": {
+    "navigationBarTitleText": "羽毛球对阵",
+    "navigationBarBackgroundColor": "#0f766e",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f6f7f4"
+  },
+  "tabBar": {
+    "color": "#64716c",
+    "selectedColor": "#0f766e",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "人员",
+        "iconPath": "images/tab-roster.png",
+        "selectedIconPath": "images/tab-roster-active.png"
+      },
+      {
+        "pagePath": "pages/schedule/schedule",
+        "text": "赛程",
+        "iconPath": "images/tab-schedule.png",
+        "selectedIconPath": "images/tab-schedule-active.png"
+      },
+      {
+        "pagePath": "pages/ranking/ranking",
+        "text": "排名",
+        "iconPath": "images/tab-ranking.png",
+        "selectedIconPath": "images/tab-ranking-active.png"
+      },
+      {
+        "pagePath": "pages/rules/rules",
+        "text": "规则",
+        "iconPath": "images/tab-rules.png",
+        "selectedIconPath": "images/tab-rules-active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

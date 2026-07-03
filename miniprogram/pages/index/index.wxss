@@ -1,0 +1,197 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+/* Header */
+.header {
+  margin-bottom: 28rpx;
+}
+
+.header-title {
+  display: block;
+  font-size: 48rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.header-desc {
+  display: block;
+  margin-top: 8rpx;
+  color: #64716c;
+  font-size: 26rpx;
+}
+
+/* Room Panel */
+.room-card {
+  background: #f0f9f7;
+  border-color: #b2e0d9;
+}
+
+.room-hint {
+  display: block;
+  margin-top: 8rpx;
+  margin-bottom: 20rpx;
+  color: #64716c;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.room-row {
+  display: flex;
+  gap: 12rpx;
+  align-items: center;
+}
+
+.room-input {
+  flex: 1;
+}
+
+.btn-join {
+  flex-shrink: 0;
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 32rpx;
+  background: #0f766e;
+  color: #fff;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.btn-join::after { border: none; }
+
+.btn-create {
+  margin-top: 16rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  background: #23312d;
+  color: #fff;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.btn-create::after { border: none; }
+
+/* Room Bar */
+.room-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #e9f5f3;
+  border: 1rpx solid #b2e0d9;
+  border-radius: 12rpx;
+  padding: 16rpx 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.room-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.room-bar-label {
+  color: #64716c;
+  font-size: 24rpx;
+}
+
+.room-bar-code {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #0f766e;
+  letter-spacing: 4rpx;
+}
+
+.room-bar-tip {
+  color: #999;
+  font-size: 20rpx;
+}
+
+.room-bar-leave {
+  color: #b42318;
+  font-size: 24rpx;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+}
+
+/* Form */
+.form-grid {
+  margin-top: 20rpx;
+}
+
+.form-grid .btn-primary {
+  margin-top: 24rpx;
+}
+
+.form-row {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 16rpx;
+  margin-bottom: 8rpx;
+}
+
+.form-item {
+  flex: 1;
+}
+
+/* Player List */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.count-badge {
+  color: #64716c;
+  font-weight: 700;
+  font-size: 28rpx;
+}
+
+.empty-hint {
+  text-align: center;
+  color: #64716c;
+  padding: 60rpx 0;
+  font-size: 26rpx;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1rpx solid #d9dfda;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.player-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+/* Settings */
+.settings-grid {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.setting-item {
+  flex: 1;
+}

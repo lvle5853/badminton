@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="rule-card">
+    <text class="rule-title">计分规则</text>
+    <text class="rule-text">一局 21 分，胜者每人积 2 分，负者 0 分；排名先看积分，再看净胜分、总得分、等级。</text>
+  </view>
+
+  <view class="rule-card">
+    <text class="rule-title">排赛规则</text>
+    <text class="rule-text">优先避免连续打 3 场、连续休 2 场，并尽量让搭档不重复、实力接近。每场 4 人由算法从所有人员中挑选最均衡的组合。</text>
+  </view>
+
+  <view class="rule-card">
+    <text class="rule-title">性别限制</text>
+    <text class="rule-text">不安排男双对女双，也不安排女双对混双；男双对混双、混双对混双可以出现。</text>
+  </view>
+
+  <view class="rule-card">
+    <text class="rule-title">等级说明</text>
+    <text class="rule-text">等级从 1 到 9（支持 0.5 步进），数值越高实力越强。系统会根据等级差异平衡对阵，让比赛更公平。</text>
+  </view>
+
+  <view class="rule-card">
+    <text class="rule-title">使用方法</text>
+    <text class="rule-text">1. 在「人员」页添加参赛者（4-13 人）\n2. 设置比赛场数和重复限制\n3. 点击「生成赛程」\n4. 在「赛程」页记录比分\n5. 在「排名」页查看实时排名</text>
+  </view>
+</view>

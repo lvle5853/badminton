@@ -1,0 +1,126 @@
+page {
+  background: #f6f7f4;
+  color: #1d2824;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 28rpx;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+/* Utilities */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60rpx;
+  height: 48rpx;
+  border-radius: 999rpx;
+  background: #e9f5f3;
+  color: #115e59;
+  font-size: 24rpx;
+  font-weight: 800;
+  padding: 0 12rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #1d2824;
+}
+
+.card {
+  background: #ffffff;
+  border: 1rpx solid #d9dfda;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.empty-state {
+  text-align: center;
+  color: #64716c;
+  padding: 100rpx 40rpx;
+}
+
+/* Buttons */
+.btn-primary {
+  background: #0f766e;
+  color: #ffffff;
+  border: none;
+  border-radius: 12rpx;
+  font-weight: 700;
+  font-size: 28rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+}
+
+.btn-primary::after {
+  border: none;
+}
+
+.btn-secondary {
+  background: #23312d;
+  color: #ffffff;
+  border: none;
+  border-radius: 12rpx;
+  font-weight: 700;
+  font-size: 28rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+}
+
+.btn-secondary::after {
+  border: none;
+}
+
+.btn-danger-sm {
+  width: 60rpx;
+  height: 60rpx;
+  min-height: 60rpx;
+  line-height: 60rpx;
+  padding: 0;
+  background: #f3eeee;
+  color: #b42318;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  text-align: center;
+}
+
+.btn-danger-sm::after {
+  border: none;
+}
+
+/* Form controls */
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  border: 1rpx solid #d9dfda;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #1d2824;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.form-label {
+  color: #64716c;
+  font-size: 24rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.picker-value {
+  height: 80rpx;
+  line-height: 80rpx;
+  border: 1rpx solid #d9dfda;
+  border-radius: 12rpx;
+  background: #ffffff;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+}
