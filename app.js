@@ -2,6 +2,7 @@ const state = {
   players: [],
   schedule: [],
   scores: {},
+  selectedPlayerIds: [],
 };
 
 const els = {
@@ -18,6 +19,7 @@ const els = {
   scheduleList: document.querySelector("#scheduleList"),
   rankingList: document.querySelector("#rankingList"),
   scheduleNote: document.querySelector("#scheduleNote"),
+  filterBar: document.querySelector("#filterBar"),
   tabs: document.querySelectorAll(".tab"),
   views: {
     schedule: document.querySelector("#scheduleView"),
@@ -79,6 +81,31 @@ function normalizeLevel(level) {
   return Math.round(clamped * 2) / 2;
 }
 
+function buildMatchCountOptions(playerCount) {
+  const values = [];
+  for (let i = 1; i <= 30; i += 1) {
+    if (playerCount >= 4 && (i * 4) % playerCount !== 0) continue;
+    values.push(i);
+  }
+  return values;
+}
+
+function updateMatchCountOptions() {
+  const playerCount = state.players.length;
+  const values = buildMatchCountOptions(playerCount);
+  const current = Number(els.matchCountInput.value) || 6;
+  els.matchCountInput.innerHTML = values
+    .map((v) => `<option value="${v}"${v === current ? " selected" : ""}>${v} 场</option>`)
+    .join("");
+  if (values.indexOf(current) === -1 && values.length) {
+    let nearest = values[0];
+    for (let i = 0; i < values.length; i += 1) {
+      if (Math.abs(values[i] - current) < Math.abs(nearest - current)) nearest = values[i];
+    }
+    els.matchCountInput.value = String(nearest);
+  }
+}
+
 function teamType(team) {
   const genders = team.map((player) => player.gender).sort().join("");
   if (genders === "MM") return "男双";
@@ -136,6 +163,7 @@ function renderPlayers() {
       </div>
     `)
     .join("");
+  updateMatchCountOptions();
 }
 
 function escapeHtml(value) {
@@ -155,6 +183,7 @@ function addPlayer(player) {
   state.players.push(player);
   state.schedule = [];
   state.scores = {};
+  state.selectedPlayerIds = [];
   saveAppState();
   renderAll();
 }
@@ -163,8 +192,59 @@ function removePlayer(id) {
   state.players = state.players.filter((player) => player.id !== id);
   state.schedule = [];
   state.scores = {};
+  state.selectedPlayerIds = [];
   saveAppState();
   renderAll();
+}
+
+function getVisibleSchedule() {
+  if (!state.selectedPlayerIds.length) return state.schedule;
+  return state.schedule.filter((match) =>
+    state.selectedPlayerIds.every((id) =>
+      match.players.some((player) => player.id === id)
+    )
+  );
+}
+
+function togglePlayerFilter(playerId) {
+  const idx = state.selectedPlayerIds.indexOf(playerId);
+  if (idx === -1) {
+    state.selectedPlayerIds.push(playerId);
+  } else {
+    state.selectedPlayerIds.splice(idx, 1);
+  }
+  renderFilterBar();
+  renderSchedule();
+}
+
+function clearPlayerFilter() {
+  state.selectedPlayerIds = [];
+  renderFilterBar();
+  renderSchedule();
+}
+
+function renderFilterBar() {
+  if (!state.players.length || !state.schedule.length) {
+    els.filterBar.innerHTML = "";
+    els.filterBar.style.display = "none";
+    return;
+  }
+
+  const selectedSet = new Set(state.selectedPlayerIds);
+  const chips = state.players
+    .map((player) => {
+      const selected = selectedSet.has(player.id);
+      const genderClass = player.gender === "M" ? "player-male" : "player-female";
+      return `<button type="button" class="filter-chip ${genderClass}${selected ? " selected" : ""}" data-filter-player="${player.id}">${escapeHtml(player.name)}</button>`;
+    })
+    .join("");
+
+  const clearBtn = state.selectedPlayerIds.length
+    ? `<button type="button" class="clear-filter" data-clear-filter>显示全部</button>`
+    : "";
+
+  els.filterBar.innerHTML = chips + clearBtn;
+  els.filterBar.style.display = "flex";
 }
 
 function chooseFour(players) {
@@ -454,15 +534,17 @@ function collectWarnings(schedule, players, repeatLimit = 2) {
 }
 
 function renderSchedule() {
-  if (!state.schedule.length) {
+  const visibleSchedule = getVisibleSchedule();
+  if (!visibleSchedule.length) {
     els.scheduleList.className = "schedule-list empty-state";
-    els.scheduleList.textContent = "添加人员后生成赛程。";
+    els.scheduleList.textContent = state.schedule.length ? "没有符合条件的比赛。" : "添加人员后生成赛程。";
     return;
   }
 
   els.scheduleList.className = "schedule-list";
-  els.scheduleList.innerHTML = state.schedule
-    .map((match, index) => {
+  els.scheduleList.innerHTML = visibleSchedule
+    .map((match) => {
+      const index = state.schedule.indexOf(match);
       const score = state.scores[index] || { a: "", b: "" };
       return `
         <article class="match-card">
@@ -471,9 +553,9 @@ function renderSchedule() {
             <span>${teamType(match.a)} vs ${teamType(match.b)} · 实力 ${formatLevel(teamLevel(match.a))}:${formatLevel(teamLevel(match.b))}</span>
           </div>
           <div class="match-body">
-            ${renderTeam(match.a)}
+            ${renderTeam(match.a, "a")}
             <div class="versus">VS</div>
-            ${renderTeam(match.b)}
+            ${renderTeam(match.b, "b")}
           </div>
           <div class="score-row">
             <input data-score="${index}" data-side="a" type="number" min="0" max="30" value="${score.a}" placeholder="左队">
@@ -486,11 +568,18 @@ function renderSchedule() {
     .join("");
 }
 
-function renderTeam(team) {
+function renderTeam(team, side) {
+  const selectedSet = new Set(state.selectedPlayerIds);
   return `
-    <div class="team">
-      <div class="team-name">${team.map((player) => escapeHtml(player.name)).join("/")}</div>
-      <div class="team-meta">${team.map((player) => `${genderLabel(player.gender)} ${formatLevel(player.level)}级`).join(" · ")}</div>
+    <div class="team ${side === "a" ? "team-left" : "team-right"}">
+      ${team.map((player) => {
+        const gc = player.gender === "M" ? "player-male" : "player-female";
+        const sel = selectedSet.has(player.id) ? " is-selected" : "";
+        return `<div class="team-player ${gc}${sel}" data-filter-player="${player.id}">
+          <span class="team-player-name">${escapeHtml(player.name)}</span>
+          <span class="team-player-level">${genderLabel(player.gender)}${formatLevel(player.level)}</span>
+        </div>`;
+      }).join("")}
     </div>
   `;
 }
@@ -573,6 +662,7 @@ function showNote(message) {
 
 function renderAll() {
   renderPlayers();
+  renderFilterBar();
   renderSchedule();
   renderRanking();
 }
@@ -613,6 +703,7 @@ els.generateBtn.addEventListener("click", () => {
   const result = generateSchedule(state.players, matchCount, repeatLimit);
   state.schedule = result.schedule;
   state.scores = {};
+  state.selectedPlayerIds = [];
   saveAppState();
   showNote(result.note);
   renderAll();
@@ -629,12 +720,29 @@ els.scheduleList.addEventListener("input", (event) => {
 });
 
 els.scheduleList.addEventListener("click", (event) => {
+  const playerCard = event.target.closest("[data-filter-player]");
+  if (playerCard) {
+    togglePlayerFilter(playerCard.dataset.filterPlayer);
+    return;
+  }
   const button = event.target.closest("[data-clear-score]");
   if (!button) return;
   delete state.scores[button.dataset.clearScore];
   saveAppState();
   renderSchedule();
   renderRanking();
+});
+
+els.filterBar.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-filter-player]");
+  if (chip) {
+    togglePlayerFilter(chip.dataset.filterPlayer);
+    return;
+  }
+  const clearBtn = event.target.closest("[data-clear-filter]");
+  if (clearBtn) {
+    clearPlayerFilter();
+  }
 });
 
 els.sampleBtn.addEventListener("click", () => {

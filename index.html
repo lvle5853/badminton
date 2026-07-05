@@ -60,7 +60,7 @@
           <div class="settings">
             <div class="setting-field">
               <label for="matchCountInput">比赛场数</label>
-              <input id="matchCountInput" type="number" min="1" max="30" value="6">
+              <select id="matchCountInput"></select>
             </div>
             <div class="setting-field">
               <label for="repeatLimitInput">同一对阵最多</label>
@@ -82,6 +82,7 @@
           </div>
 
           <div id="scheduleView" class="view active">
+            <div id="filterBar" class="filter-bar"></div>
             <div id="scheduleList" class="schedule-list empty-state">
               添加人员后生成赛程。
             </div>
@@ -106,6 +107,14 @@
               <div>
                 <h3>性别</h3>
                 <p>不安排男双对女双，也不安排女双对混双；男双对混双、混双对混双可以出现。</p>
+              </div>
+              <div>
+                <h3>等级说明</h3>
+                <p>等级从 1 到 9（支持 0.5 步进），数值越高实力越强。系统会根据等级差异平衡对阵，让比赛更公平。</p>
+              </div>
+              <div>
+                <h3>使用方法</h3>
+                <p>1. 在左侧添加参赛者（4-13 人）<br>2. 设置比赛场数和重复限制<br>3. 点击「生成赛程」<br>4. 在赛程页记录比分<br>5. 在排名页查看实时排名</p>
               </div>
             </div>
           </div>
