@@ -1,0 +1,9 @@
+name = "badminton"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+routes = [{ pattern = "badmintonforfun.top/*", zone_name = "badmintonforfun.top" }]
+
+[[kv_namespaces]]
+binding = "ROOMS"
+id = "b8656185af45420b9541b472e01df59f"
