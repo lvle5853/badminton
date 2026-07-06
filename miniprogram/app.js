@@ -115,6 +115,8 @@ App({
     var g = this.globalData
     var that = this
     var attempts = 0
+    g.scores = {}
+    g._scoreTs = {}
 
     function tryCreate() {
       if (++attempts > 10) {
@@ -129,7 +131,7 @@ App({
         adminId: g.localUid,
         players: g.players,
         schedule: g.schedule,
-        scores: g.scores,
+        scores: {},
         settings: g.settings,
         _lastWriterId: g._lastWriterId
       }, function (status, data) {
@@ -165,12 +167,15 @@ App({
         callback(true, data.roomCode, 'joined')
         return
       }
+      // 房间不存在，创建新房间，清空旧比分
+      g.scores = {}
+      g._scoreTs = {}
       that._apiRequest('POST', '/api/room', {
         roomCode: code,
         adminId: g.localUid,
         players: g.players,
         schedule: g.schedule,
-        scores: g.scores,
+        scores: {},
         settings: g.settings,
         _lastWriterId: g._lastWriterId
       }, function (status2, data2) {
@@ -295,6 +300,8 @@ App({
     }
     this.globalData.roomCode = ''
     this.globalData.isAdmin = true
+    this.globalData.scores = {}
+    this.globalData._scoreTs = {}
     this.saveState()
     this.notifyPages()
   },
