@@ -225,7 +225,7 @@ App({
           that._applyRoomData(data)
         }
       })
-    }, 3000)
+    }, 1500)
   },
 
   // 写操作后立刻拉取最新数据（比轮询更快感知变化）
@@ -358,7 +358,7 @@ App({
           that._refreshNow()
         })
       }
-    }, 500)
+    }, 200)
   },
 
   clearScore(matchIndex) {
