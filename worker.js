@@ -101,20 +101,26 @@ async function handlePut(request, env) {
     applyNestedUpdate(existing, body)
   } else {
     // 顶层字段合并
-    // scores 支持逐场次逐字段合并，不整体覆盖
+    // scores 支持逐场次逐字段合并，带时间戳防旧数据覆盖新数据
     if (body.scores && existing.scores && typeof body.scores === 'object' && typeof existing.scores === 'object') {
       for (const idx of Object.keys(body.scores)) {
         if (body.scores[idx] === null) {
           delete existing.scores[idx]
+          delete existing.scores[idx + '_ts']
         } else if (typeof body.scores[idx] === 'object' && typeof existing.scores[idx] === 'object') {
           // 逐字段合并，只覆盖请求中明确带的字段
+          var incomingTs = body.scores[idx + '_ts'] || {}
+          var existingTs = existing.scores[idx + '_ts'] || {}
           for (const field of Object.keys(body.scores[idx])) {
-            if (body.scores[idx][field] === null || body.scores[idx][field] === '') {
-              existing.scores[idx][field] = ''
-            } else {
-              existing.scores[idx][field] = body.scores[idx][field]
+            if (field === '_ts') continue
+            var newTs = incomingTs[field] || 0
+            var oldTs = existingTs[field] || 0
+            if (newTs >= oldTs) {
+              existing.scores[idx][field] = body.scores[idx][field] || ''
+              existingTs[field] = newTs
             }
           }
+          existing.scores[idx + '_ts'] = existingTs
         } else {
           existing.scores[idx] = body.scores[idx]
         }

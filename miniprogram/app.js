@@ -245,13 +245,44 @@ App({
     const g = this.globalData
     if (Array.isArray(room.players)) g.players = room.players
     if (Array.isArray(room.schedule)) g.schedule = room.schedule
-    if (room.scores && typeof room.scores === 'object') g.scores = room.scores
     if (room.settings) {
       if (room.settings.matchCount) g.settings.matchCount = room.settings.matchCount
       if (room.settings.repeatLimit) g.settings.repeatLimit = room.settings.repeatLimit
     }
     if (room.adminId) {
       g.isAdmin = room.adminId === g.localUid
+    }
+    // scores：带时间戳对比，旧数据不覆盖本地新数据
+    if (room.scores && typeof room.scores === 'object') {
+      if (!g._scoreTs) g._scoreTs = {}
+      var merged = {}
+      for (var key in room.scores) {
+        if (key.endsWith('_ts')) continue
+        var serverTs = room.scores[key + '_ts'] || {}
+        var localTs = g._scoreTs[key] || {}
+        var serverScore = room.scores[key]
+        var localScore = g.scores[key]
+        if (typeof serverScore === 'object' && serverScore !== null) {
+          merged[key] = {}
+          for (var field in serverScore) {
+            if ((serverTs[field] || 0) >= (localTs[field] || 0)) {
+              merged[key][field] = serverScore[field]
+            } else {
+              merged[key][field] = localScore ? (localScore[field] || '') : ''
+            }
+          }
+          // 更新时间戳
+          for (var field in serverTs) {
+            if ((serverTs[field] || 0) >= (localTs[field] || 0)) {
+              localTs[field] = serverTs[field]
+            }
+          }
+          g._scoreTs[key] = localTs
+        } else {
+          merged[key] = serverScore
+        }
+      }
+      g.scores = merged
     }
     this.saveState()
     this.notifyPages()
@@ -337,11 +368,16 @@ App({
       g.scores[matchIndex] = { a: '', b: '' }
     }
     g.scores[matchIndex][side] = value
+    var now = Date.now()
+    if (!g._scoreTs) g._scoreTs = {}
+    if (!g._scoreTs[matchIndex]) g._scoreTs[matchIndex] = {}
+    g._scoreTs[matchIndex][side] = now
     this.saveState()
 
     if (g.roomCode) {
       var updateData = {}
       updateData['scores.' + matchIndex + '.' + side] = value
+      updateData['scores.' + matchIndex + '_ts'] = g._scoreTs[matchIndex]
       this._apiRequest('PUT', '/api/room?code=' + g.roomCode, updateData)
     }
 
@@ -352,10 +388,13 @@ App({
     this._debouncedSyncScore = setTimeout(function () {
       that._debouncedSyncScore = null
       if (g.roomCode) {
-        that._apiRequest('PUT', '/api/room?code=' + g.roomCode, {
-          scores: g.scores,
-          _lastWriterId: g._lastWriterId
-        }, function () {
+        var payload = { scores: g.scores, _lastWriterId: g._lastWriterId }
+        if (g._scoreTs) {
+          for (var idx in g._scoreTs) {
+            payload['scores.' + idx + '_ts'] = g._scoreTs[idx]
+          }
+        }
+        that._apiRequest('PUT', '/api/room?code=' + g.roomCode, payload, function () {
           that._refreshNow()
         })
       }
