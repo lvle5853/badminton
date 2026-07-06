@@ -36,7 +36,7 @@ App({
   onHide() {
     _appVisible = false
     if (_pollTimer) {
-      clearInterval(_pollTimer)
+      clearTimeout(_pollTimer)
       _pollTimer = null
     }
   },
@@ -207,16 +207,15 @@ App({
 
   _startPolling() {
     if (_pollTimer) {
-      clearInterval(_pollTimer)
+      clearTimeout(_pollTimer)
       _pollTimer = null
     }
     var g = this.globalData
     if (!g.roomCode) return
 
     var that = this
-    _pollTimer = setInterval(function () {
+    function poll() {
       if (!g.roomCode || !_appVisible) {
-        clearInterval(_pollTimer)
         _pollTimer = null
         return
       }
@@ -224,8 +223,11 @@ App({
         if (status === 200 && data) {
           that._applyRoomData(data)
         }
+        _pollTimer = setTimeout(poll, 1000)
       })
-    }, 1500)
+    }
+    poll()
+  },
   },
 
   // 写操作后立刻拉取最新数据（比轮询更快感知变化）
@@ -258,7 +260,7 @@ App({
 
   leaveRoom() {
     if (_pollTimer) {
-      clearInterval(_pollTimer)
+      clearTimeout(_pollTimer)
       _pollTimer = null
     }
     this.globalData.roomCode = ''
