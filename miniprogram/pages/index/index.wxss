@@ -62,20 +62,6 @@
 
 .btn-join::after { border: none; }
 
-.btn-create {
-  margin-top: 16rpx;
-  height: 80rpx;
-  line-height: 80rpx;
-  background: #23312d;
-  color: #fff;
-  border: none;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.btn-create::after { border: none; }
-
 /* Room Bar */
 .room-bar {
   display: flex;
@@ -183,6 +169,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 1;
+}
+
+.gender-male {
+  background: #e8f2ff;
+  color: #1769aa;
+}
+
+.gender-female {
+  background: #ffeaf3;
+  color: #b8326a;
 }
 
 /* Settings */

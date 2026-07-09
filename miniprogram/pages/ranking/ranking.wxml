@@ -19,12 +19,12 @@
       <text class="rr-rank">{{item.rank}}</text>
       <view class="rr-name">
         <text class="rr-player-name">{{item.name}}</text>
-        <text class="badge">{{item.gender}} {{item.level}}</text>
+        <text class="badge {{item.genderClass}}">{{item.gender}} {{item.level}}</text>
       </view>
       <text class="rr-stat rr-points">{{item.points}}</text>
       <text class="rr-stat">{{item.winLoss}}</text>
       <text class="rr-stat">{{item.diff}}</text>
-      <text class="rr-stat">{{item.games}}</text>
+      <text class="rr-stat">{{item.gameText}}</text>
     </view>
   </view>
 </view>

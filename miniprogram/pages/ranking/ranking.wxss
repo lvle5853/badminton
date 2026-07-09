@@ -80,3 +80,13 @@
   color: #0f766e;
   font-size: 28rpx;
 }
+
+.gender-male {
+  background: #e8f2ff;
+  color: #1769aa;
+}
+
+.gender-female {
+  background: #ffeaf3;
+  color: #b8326a;
+}

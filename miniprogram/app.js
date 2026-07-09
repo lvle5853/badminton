@@ -1,8 +1,7 @@
 const schedule = require('./utils/schedule')
 
-var WORKER_BASE = 'https://badmintonforfun.top'
-var _pollTimer = null
-var _appVisible = true
+var db = null
+var roomWatcher = null
 
 App({
   globalData: {
@@ -14,32 +13,35 @@ App({
       repeatLimit: 1
     },
     roomCode: '',
+    roomDocId: '',
     isAdmin: true,
     localUid: '',
-    isTypingScore: false,
-    _refreshCallbacks: [],
-    _lastWriterId: Date.now() + '' + Math.random()
+    _scoreTs: {},
+    _scoreSyncTimers: {},
+    _refreshCallbacks: []
   },
 
   onLaunch() {
     this._initLocalUid()
+    if (wx.cloud) {
+      wx.cloud.init({
+        traceUser: true,
+        timeout: 10000
+      })
+      db = wx.cloud.database()
+    } else {
+      console.warn('当前环境不支持 wx.cloud')
+    }
     this.loadState()
   },
 
   onShow() {
-    _appVisible = true
-    if (this.globalData.roomCode && !_pollTimer) {
-      this._startPolling()
+    if (this.globalData.roomCode && !roomWatcher) {
+      this._setupRoomListener()
     }
   },
 
-  onHide() {
-    _appVisible = false
-    if (_pollTimer) {
-      clearTimeout(_pollTimer)
-      _pollTimer = null
-    }
-  },
+  onHide() {},
 
   _initLocalUid() {
     var uid = wx.getStorageSync('badminton-local-uid')
@@ -50,8 +52,6 @@ App({
     this.globalData.localUid = uid
   },
 
-  // --- Local persistence ---
-
   loadState() {
     try {
       const raw = wx.getStorageSync('badminton-scheduler-state-v1')
@@ -61,11 +61,13 @@ App({
       g.players = Array.isArray(data.players) ? data.players : []
       g.schedule = Array.isArray(data.schedule) ? data.schedule : []
       g.scores = data.scores && typeof data.scores === 'object' ? data.scores : {}
+      g._scoreTs = data._scoreTs && typeof data._scoreTs === 'object' ? data._scoreTs : {}
       if (data.settings) {
         if (data.settings.matchCount) g.settings.matchCount = data.settings.matchCount
         if (data.settings.repeatLimit) g.settings.repeatLimit = data.settings.repeatLimit
       }
       if (data.roomCode) g.roomCode = data.roomCode
+      if (data.roomDocId) g.roomDocId = data.roomDocId
       if (typeof data.isAdmin === 'boolean') g.isAdmin = data.isAdmin
     } catch (e) {
       console.warn('读取本地数据失败', e)
@@ -79,8 +81,10 @@ App({
         players: g.players,
         schedule: g.schedule,
         scores: g.scores,
+        _scoreTs: g._scoreTs,
         settings: g.settings,
         roomCode: g.roomCode,
+        roomDocId: g.roomDocId,
         isAdmin: g.isAdmin
       }))
     } catch (e) {
@@ -88,104 +92,71 @@ App({
     }
   },
 
-  // --- Room management ---
-
   isCloudAvailable() {
-    return true
+    return !!db
   },
 
-  _apiRequest(method, path, data, callback) {
-    wx.request({
-      url: WORKER_BASE + path,
-      method: method,
-      data: data || undefined,
-      header: { 'Content-Type': 'application/json' },
-      timeout: 10000,
+  _findRoom(code, callback) {
+    if (!db) {
+      callback(false, null)
+      return
+    }
+    db.collection('rooms').where({ roomCode: code }).get({
       success: function (res) {
-        callback && callback(res.statusCode, res.data)
+        callback(true, res.data && res.data.length ? res.data[0] : null)
       },
-      fail: function (err) {
-        console.warn('API请求失败', method, path, err)
-        callback && callback(0, null)
+      fail: function () {
+        callback(false, null)
       }
     })
-  },
-
-  createRoom(callback) {
-    var g = this.globalData
-    var that = this
-    var attempts = 0
-    g.scores = {}
-    g._scoreTs = {}
-
-    function tryCreate() {
-      if (++attempts > 10) {
-        callback(false, '创建失败，请重试')
-        return
-      }
-
-      var code = String(Math.floor(1000 + Math.random() * 9000))
-
-      that._apiRequest('POST', '/api/room', {
-        roomCode: code,
-        adminId: g.localUid,
-        players: g.players,
-        schedule: g.schedule,
-        scores: {},
-        settings: g.settings,
-        _lastWriterId: g._lastWriterId
-      }, function (status, data) {
-        if (status === 409) {
-          tryCreate()
-          return
-        }
-        if (status === 201) {
-          g.roomCode = code
-          g.isAdmin = true
-          that.saveState()
-          that._startPolling()
-          callback(true, code)
-        } else {
-          callback(false, '创建失败，请重试')
-        }
-      })
-    }
-
-    tryCreate()
   },
 
   createOrJoinRoom(code, callback) {
     var that = this
     var g = this.globalData
-    this._apiRequest('GET', '/api/room?code=' + code, null, function (status, data) {
-      if (status === 200 && data) {
-        g.roomCode = data.roomCode
-        g.isAdmin = data.adminId ? data.adminId === g.localUid : true
-        that._applyRoomData(data)
-        that.saveState()
-        that._startPolling()
-        callback(true, data.roomCode, 'joined')
+    if (!db) {
+      callback(false, '云开发未初始化，请检查配置')
+      return
+    }
+
+    this._findRoom(code, function (ok, room) {
+      if (!ok) {
+        callback(false, '进入房间失败，请重试')
         return
       }
-      // 房间不存在，创建新房间，清空旧比分
+
+      if (room) {
+        g.roomCode = room.roomCode
+        g.roomDocId = room._id || ''
+        g.isAdmin = room.adminId ? room.adminId === g.localUid : true
+        that._applyRoomData(room)
+        that.saveState()
+        that._setupRoomListener()
+        callback(true, room.roomCode, 'joined')
+        return
+      }
+
       g.scores = {}
       g._scoreTs = {}
-      that._apiRequest('POST', '/api/room', {
-        roomCode: code,
-        adminId: g.localUid,
-        players: g.players,
-        schedule: g.schedule,
-        scores: {},
-        settings: g.settings,
-        _lastWriterId: g._lastWriterId
-      }, function (status2, data2) {
-        if (status2 === 201) {
+      db.collection('rooms').add({
+        data: {
+          roomCode: code,
+          adminId: g.localUid,
+          players: g.players,
+          schedule: g.schedule,
+          scores: {},
+          settings: g.settings,
+          createdAt: new Date()
+        },
+        success: function (res) {
           g.roomCode = code
+          g.roomDocId = res._id || ''
           g.isAdmin = true
           that.saveState()
-          that._startPolling()
+          that._setupRoomListener()
           callback(true, code, 'created')
-        } else {
+        },
+        fail: function () {
           callback(false, '进入房间失败，请重试')
         }
       })
@@ -193,63 +164,60 @@ App({
   },
 
   joinRoom(code, callback) {
+    if (!db) {
+      callback(false, '云开发未初始化，请检查配置')
+      return
+    }
+
     var that = this
     var g = this.globalData
-
-    this._apiRequest('GET', '/api/room?code=' + code, null, function (status, data) {
-      if (status !== 200 || !data) {
-        callback(false, status === 404 ? '房间不存在' : '加入失败，请重试')
+    this._findRoom(code, function (ok, room) {
+      if (!ok) {
+        callback(false, '加入失败，请重试')
         return
       }
-      g.roomCode = data.roomCode
-      g.isAdmin = data.adminId ? data.adminId === g.localUid : true
-      that._applyRoomData(data)
+      if (!room) {
+        callback(false, '房间不存在')
+        return
+      }
+
+      g.roomCode = room.roomCode
+      g.roomDocId = room._id || ''
+      g.isAdmin = room.adminId ? room.adminId === g.localUid : true
+      that._applyRoomData(room)
       that.saveState()
-      that._startPolling()
-      callback(true, data.roomCode)
+      that._setupRoomListener()
+      callback(true, room.roomCode)
     })
   },
 
-  _startPolling() {
-    if (_pollTimer) {
-      clearTimeout(_pollTimer)
-      _pollTimer = null
+  _setupRoomListener() {
+    if (roomWatcher) {
+      roomWatcher.close()
+      roomWatcher = null
     }
-    var g = this.globalData
-    if (!g.roomCode) return
+    if (!db || !this.globalData.roomCode) return
 
     var that = this
-    function poll() {
-      if (!g.roomCode || !_appVisible) {
-        _pollTimer = null
-        return
-      }
-      that._apiRequest('GET', '/api/room?code=' + g.roomCode, null, function (status, data) {
-        if (status === 200 && data) {
-          that._applyRoomData(data)
+    roomWatcher = db.collection('rooms')
+      .where({ roomCode: this.globalData.roomCode })
+      .watch({
+        onChange: function (snapshot) {
+          if (snapshot.docs && snapshot.docs.length > 0) {
+            that._applyRoomData(snapshot.docs[0])
+          }
+        },
+        onError: function (err) {
+          console.warn('实时同步失败', err)
         }
-        _pollTimer = setTimeout(poll, 1000)
       })
-    }
-    poll()
-  },
-
-  // 写操作后立刻拉取最新数据（比轮询更快感知变化）
-  _refreshNow() {
-    var g = this.globalData
-    if (!g.roomCode) return
-    var that = this
-    this._apiRequest('GET', '/api/room?code=' + g.roomCode, null, function (status, data) {
-      if (status === 200 && data) {
-        that._applyRoomData(data)
-      }
-    })
   },
 
   _applyRoomData(room) {
     const g = this.globalData
     if (Array.isArray(room.players)) g.players = room.players
     if (Array.isArray(room.schedule)) g.schedule = room.schedule
+    if (room._id) g.roomDocId = room._id
     if (room.settings) {
       if (room.settings.matchCount) g.settings.matchCount = room.settings.matchCount
       if (room.settings.repeatLimit) g.settings.repeatLimit = room.settings.repeatLimit
@@ -257,48 +225,47 @@ App({
     if (room.adminId) {
       g.isAdmin = room.adminId === g.localUid
     }
-    // scores：带时间戳对比，旧数据不覆盖本地新数据
+    if (!g._scoreTs) g._scoreTs = {}
     if (room.scores && typeof room.scores === 'object') {
-      if (!g._scoreTs) g._scoreTs = {}
-      var merged = {}
+      var mergedScores = {}
       for (var key in room.scores) {
-        if (key.endsWith('_ts')) continue
-        var serverTs = room.scores[key + '_ts'] || {}
-        var localTs = g._scoreTs[key] || {}
         var serverScore = room.scores[key]
-        var localScore = g.scores[key]
-        if (typeof serverScore === 'object' && serverScore !== null) {
-          merged[key] = {}
-          for (var field in serverScore) {
-            if ((serverTs[field] || 0) >= (localTs[field] || 0)) {
-              merged[key][field] = serverScore[field]
-            } else {
-              merged[key][field] = localScore ? (localScore[field] || '') : ''
-            }
-          }
-          // 更新时间戳
-          for (var field in serverTs) {
-            if ((serverTs[field] || 0) >= (localTs[field] || 0)) {
-              localTs[field] = serverTs[field]
-            }
-          }
-          g._scoreTs[key] = localTs
-        } else {
-          merged[key] = serverScore
+        if (!serverScore || typeof serverScore !== 'object') {
+          mergedScores[key] = serverScore
+          continue
         }
+
+        mergedScores[key] = {}
+        var serverTs = serverScore._ts || {}
+        var localTs = g._scoreTs[key] || {}
+        var localScore = g.scores[key] || {}
+        ;['a', 'b'].forEach(function (side) {
+          var remoteTime = serverTs[side] || 0
+          var localTime = localTs[side] || 0
+          if (remoteTime >= localTime) {
+            mergedScores[key][side] = serverScore[side] || ''
+            if (remoteTime) localTs[side] = remoteTime
+          } else {
+            mergedScores[key][side] = localScore[side] || ''
+          }
+        })
+        if (localTs.a || localTs.b) g._scoreTs[key] = localTs
       }
-      g.scores = merged
+      g.scores = mergedScores
+    } else if (!Object.keys(g._scoreTs).length) {
+      g.scores = {}
     }
     this.saveState()
     this.notifyPages()
   },
 
   leaveRoom() {
-    if (_pollTimer) {
-      clearTimeout(_pollTimer)
-      _pollTimer = null
+    if (roomWatcher) {
+      roomWatcher.close()
+      roomWatcher = null
     }
     this.globalData.roomCode = ''
+    this.globalData.roomDocId = ''
     this.globalData.isAdmin = true
     this.globalData.scores = {}
     this.globalData._scoreTs = {}
@@ -313,30 +280,59 @@ App({
     }
   },
 
+  _updateCurrentRoom(data, callback) {
+    var g = this.globalData
+    if (!db || !g.roomCode) {
+      callback && callback(false)
+      return
+    }
+    if (g.roomDocId) {
+      db.collection('rooms').doc(g.roomDocId).update({
+        data: data,
+        success: function () {
+          callback && callback(true)
+        },
+        fail: function () {
+          g.roomDocId = ''
+          callback && callback(false)
+        }
+      })
+      return
+    }
+    this._findRoom(g.roomCode, function (ok, room) {
+      if (!ok || !room || !room._id) {
+        callback && callback(false)
+        return
+      }
+      g.roomDocId = room._id
+      db.collection('rooms').doc(room._id).update({
+        data: data,
+        success: function () {
+          callback && callback(true)
+        },
+        fail: function () {
+          callback && callback(false)
+        }
+      })
+    })
+  },
+
   syncRoomSettings() {
     var g = this.globalData
-    if (!g.roomCode) return
-    var that = this
-    this._apiRequest('PUT', '/api/room?code=' + g.roomCode, { settings: g.settings }, function () {
-      that._refreshNow()
-    })
+    if (!g.roomCode || !g.isAdmin) return
+    this._updateCurrentRoom({ settings: g.settings })
   },
 
   syncRoomState() {
     var g = this.globalData
-    if (!g.roomCode) return
-    var that = this
-    this._apiRequest('PUT', '/api/room?code=' + g.roomCode, {
+    if (!g.roomCode || !g.isAdmin) return
+    this._updateCurrentRoom({
       players: g.players,
       schedule: g.schedule,
       scores: g.scores,
       settings: g.settings
-    }, function () {
-      that._refreshNow()
     })
   },
-
-  // --- Schedule operations ---
 
   generateSchedule() {
     const g = this.globalData
@@ -351,18 +347,27 @@ App({
       return { success: false, note: '当前场次数无法保证每个人上场次数相同，请重新选择比赛场数。' }
     }
     const result = schedule.generate(g.players, g.settings.matchCount, g.settings.repeatLimit)
+    if (!result.schedule.length) {
+      return { success: false, note: result.note }
+    }
+
+    if (g._scoreSyncTimers) {
+      for (var timerKey in g._scoreSyncTimers) {
+        clearTimeout(g._scoreSyncTimers[timerKey])
+        delete g._scoreSyncTimers[timerKey]
+      }
+    }
     g.schedule = result.schedule
     g.scores = {}
+    g._scoreTs = {}
     this.saveState()
 
-    if (g.roomCode) {
-      var that = this
-      this._apiRequest('PUT', '/api/room?code=' + g.roomCode, {
+    if (g.roomCode && db) {
+      var _ = db.command
+      this._updateCurrentRoom({
         schedule: g.schedule,
-        scores: g.scores,
+        scores: _.set({}),
         settings: g.settings
-      }, function () {
-        that._refreshNow()
       })
     }
 
@@ -381,50 +386,95 @@ App({
     g._scoreTs[matchIndex][side] = now
     this.saveState()
 
-    if (g.roomCode) {
-      var updateData = {}
-      updateData['scores.' + matchIndex + '.' + side] = value
-      updateData['scores.' + matchIndex + '_ts'] = g._scoreTs[matchIndex]
-      this._apiRequest('PUT', '/api/room?code=' + g.roomCode, updateData)
-    }
-
-    var that = this
-    if (this._debouncedSyncScore) {
-      clearTimeout(this._debouncedSyncScore)
-    }
-    this._debouncedSyncScore = setTimeout(function () {
-      that._debouncedSyncScore = null
-      if (g.roomCode) {
-        var payload = { scores: g.scores, _lastWriterId: g._lastWriterId }
-        if (g._scoreTs) {
-          for (var idx in g._scoreTs) {
-            payload['scores.' + idx + '_ts'] = g._scoreTs[idx]
-          }
-        }
-        that._apiRequest('PUT', '/api/room?code=' + g.roomCode, payload, function () {
-          that._refreshNow()
-        })
+    if (g.roomCode && db) {
+      var that = this
+      var timerKey = matchIndex + ':' + side
+      if (!g._scoreSyncTimers) g._scoreSyncTimers = {}
+      if (g._scoreSyncTimers[timerKey]) {
+        clearTimeout(g._scoreSyncTimers[timerKey])
       }
-    }, 200)
+      g._scoreSyncTimers[timerKey] = setTimeout(function () {
+        delete g._scoreSyncTimers[timerKey]
+        var latestValue = g.scores[matchIndex] ? g.scores[matchIndex][side] : ''
+        var latestTs = g._scoreTs && g._scoreTs[matchIndex] ? g._scoreTs[matchIndex][side] : now
+        var data = {}
+        data['scores.' + matchIndex + '.' + side] = latestValue
+        data['scores.' + matchIndex + '._ts.' + side] = latestTs
+        that._updateCurrentRoom(data, function () {
+          that.notifyPages()
+        })
+      }, 300)
+    } else {
+      this.notifyPages()
+    }
+  },
+
+  flushScoreSync() {
+    var g = this.globalData
+    if (!g._scoreSyncTimers) return
+    for (var key in g._scoreSyncTimers) {
+      clearTimeout(g._scoreSyncTimers[key])
+      delete g._scoreSyncTimers[key]
+    }
+    if (!g.roomCode || !db) {
+      this.notifyPages()
+      return
+    }
+    var data = {}
+    for (var idx in g._scoreTs) {
+      if (!g.scores[idx]) continue
+      ;['a', 'b'].forEach(function (side) {
+        if (!g._scoreTs[idx][side]) return
+        data['scores.' + idx + '.' + side] = g.scores[idx][side] || ''
+        data['scores.' + idx + '._ts.' + side] = g._scoreTs[idx][side]
+      })
+    }
+    this._updateCurrentRoom(data, this.notifyPages.bind(this))
+  },
+
+  updateScoreImmediate(matchIndex, side, value) {
+    var g = this.globalData
+    if (!g.scores[matchIndex]) {
+      g.scores[matchIndex] = { a: '', b: '' }
+    }
+    g.scores[matchIndex][side] = value
+    var now = Date.now()
+    if (!g._scoreTs) g._scoreTs = {}
+    if (!g._scoreTs[matchIndex]) g._scoreTs[matchIndex] = {}
+    g._scoreTs[matchIndex][side] = now
+    this.saveState()
+
+    if (g.roomCode && db) {
+      var data = {}
+      data['scores.' + matchIndex + '.' + side] = value
+      data['scores.' + matchIndex + '._ts.' + side] = now
+      this._updateCurrentRoom(data, this.notifyPages.bind(this))
+    } else {
+      this.notifyPages()
+    }
   },
 
   clearScore(matchIndex) {
     var g = this.globalData
-    if (this._debouncedSyncScore) {
-      clearTimeout(this._debouncedSyncScore)
-      this._debouncedSyncScore = null
-    }
-
-    delete g.scores[matchIndex]
-    this.saveState()
-
-    if (g.roomCode) {
-      var that = this
-      var updateData = { _lastWriterId: g._lastWriterId }
-      updateData['scores.' + matchIndex] = null
-      this._apiRequest('PUT', '/api/room?code=' + g.roomCode, updateData, function () {
-        that._refreshNow()
+    if (g._scoreSyncTimers) {
+      ;['a', 'b'].forEach(function (side) {
+        var timerKey = matchIndex + ':' + side
+        if (g._scoreSyncTimers[timerKey]) {
+          clearTimeout(g._scoreSyncTimers[timerKey])
+          delete g._scoreSyncTimers[timerKey]
+        }
       })
+    }
+    delete g.scores[matchIndex]
+    if (g._scoreTs) delete g._scoreTs[matchIndex]
+    this.saveState()
+    this.notifyPages()
+
+    if (g.roomCode && db) {
+      var _ = db.command
+      var data = {}
+      data['scores.' + matchIndex] = _.remove()
+      this._updateCurrentRoom(data)
     }
   },
 

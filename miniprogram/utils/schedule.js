@@ -26,6 +26,16 @@ function teamLevel(team) {
   return team[0].level + team[1].level
 }
 
+function matchLevelDiff(match) {
+  return Math.abs(teamLevel(match.a) - teamLevel(match.b))
+}
+
+function filterCandidatesByLevelDiff(candidates, maxDiff) {
+  return candidates.filter(function (match) {
+    return matchLevelDiff(match) <= maxDiff
+  })
+}
+
 function pairKey(a, b) {
   return [a.id, b.id].sort().join('|')
 }
@@ -133,7 +143,28 @@ function createInitialStats(players) {
   return stats
 }
 
-function scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, gameIndex, totalGames, playerCount, repeatLimit) {
+function getTargetGames(players, matchCount) {
+  var totalSlots = matchCount * 4
+  return totalSlots % players.length === 0 ? totalSlots / players.length : null
+}
+
+function isFeasibleByQuota(match, stats, players, remainingAfter, targetGames) {
+  if (targetGames === null) return true
+
+  var playing = {}
+  match.players.forEach(function (p) { playing[p.id] = true })
+
+  for (var i = 0; i < players.length; i += 1) {
+    var player = players[i]
+    var gamesAfter = stats[player.id].games + (playing[player.id] ? 1 : 0)
+    if (gamesAfter > targetGames) return false
+    if (gamesAfter + remainingAfter < targetGames) return false
+  }
+
+  return true
+}
+
+function scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, gameIndex, totalGames, playerCount, repeatLimit, targetGames) {
   var cost = match.baseCost + Math.random() * 4
   var selectedCount = selectedCounts[match.key] || 0
   var selectedTypeCount = selectedTypeCounts[match.typeKey] || 0
@@ -161,6 +192,9 @@ function scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, gameIn
   var averageGames = ((gameIndex + 1) * 4) / playerCount
   match.players.forEach(function (player) {
     cost += Math.max(0, stats[player.id].games + 1 - averageGames - 1.2) * 20
+    if (targetGames !== null) {
+      cost += Math.max(0, stats[player.id].games + 1 - targetGames) * 10000
+    }
   })
 
   if (pairKey(match.a[0], match.a[1]) === pairKey(match.b[0], match.b[1])) cost += 999
@@ -203,18 +237,165 @@ function applyMatchToStats(match, stats, players) {
   })
 }
 
+function clonePlainObject(obj) {
+  var copy = {}
+  Object.keys(obj).forEach(function (key) {
+    copy[key] = obj[key]
+  })
+  return copy
+}
+
+function cloneStats(stats) {
+  var copy = {}
+  Object.keys(stats).forEach(function (id) {
+    copy[id] = {
+      id: stats[id].id,
+      playStreak: stats[id].playStreak,
+      restStreak: stats[id].restStreak,
+      games: stats[id].games,
+      partners: clonePlainObject(stats[id].partners),
+      opponents: clonePlainObject(stats[id].opponents)
+    }
+  })
+  return copy
+}
+
+function cloneCounts(counts) {
+  return clonePlainObject(counts)
+}
+
+function copyMatch(chosen, index) {
+  return {
+    a: chosen.a,
+    b: chosen.b,
+    players: chosen.players,
+    key: chosen.key,
+    typeKey: chosen.typeKey,
+    baseCost: chosen.baseCost,
+    index: index + 1
+  }
+}
+
+function generateWithQuota(players, matchCount, repeatLimit, candidates, targetGames, beamWidth, perStateLimit) {
+  beamWidth = beamWidth || (players.length <= 8 ? 72 : 48)
+  perStateLimit = perStateLimit || (players.length <= 8 ? 8 : 6)
+  var states = [{
+    stats: createInitialStats(players),
+    selectedCounts: {},
+    selectedTypeCounts: {},
+    schedule: [],
+    cost: 0
+  }]
+
+  for (var i = 0; i < matchCount; i += 1) {
+    var remainingAfter = matchCount - i - 1
+    var nextStates = []
+
+    states.forEach(function (state) {
+      var ranked = candidates
+        .filter(function (match) {
+          return isFeasibleByQuota(match, state.stats, players, remainingAfter, targetGames)
+        })
+        .map(function (match) {
+          return {
+            match: match,
+            cost: scoreCandidate(match, state.stats, state.selectedCounts, state.selectedTypeCounts, i, matchCount, players.length, repeatLimit, targetGames)
+          }
+        })
+        .sort(function (x, y) { return x.cost - y.cost })
+        .slice(0, perStateLimit)
+
+      ranked.forEach(function (item) {
+        var nextStats = cloneStats(state.stats)
+        var nextSelectedCounts = cloneCounts(state.selectedCounts)
+        var nextSelectedTypeCounts = cloneCounts(state.selectedTypeCounts)
+        var chosen = item.match
+        var nextSchedule = state.schedule.concat([copyMatch(chosen, i)])
+
+        nextSelectedCounts[chosen.key] = (nextSelectedCounts[chosen.key] || 0) + 1
+        nextSelectedTypeCounts[chosen.typeKey] = (nextSelectedTypeCounts[chosen.typeKey] || 0) + 1
+        applyMatchToStats(chosen, nextStats, players)
+
+        nextStates.push({
+          stats: nextStats,
+          selectedCounts: nextSelectedCounts,
+          selectedTypeCounts: nextSelectedTypeCounts,
+          schedule: nextSchedule,
+          cost: state.cost + item.cost
+        })
+      })
+    })
+
+    if (!nextStates.length) return null
+
+    nextStates.sort(function (a, b) {
+      return a.cost - b.cost
+    })
+    states = nextStates.slice(0, beamWidth)
+  }
+
+  var best = null
+  states.forEach(function (state) {
+    var penalty = schedulePenalty(state.schedule, players, repeatLimit)
+    if (!best || penalty < best.penalty) {
+      best = { schedule: state.schedule, penalty: penalty }
+    }
+  })
+
+  return best
+}
+
+function repeatBaseQuotaSchedule(players, matchCount, repeatLimit, candidates) {
+  if (matchCount % players.length !== 0) return null
+  if ((players.length * 4) % players.length !== 0) return null
+
+  var rounds = matchCount / players.length
+  var baseTargetGames = 4
+  var base = generateWithQuota(players, players.length, repeatLimit, candidates, baseTargetGames, 260, 14)
+  if (!base && repeatLimit < 2) {
+    base = generateWithQuota(players, players.length, 2, candidates, baseTargetGames, 260, 14)
+  }
+  if (!base && repeatLimit < 3) {
+    base = generateWithQuota(players, players.length, 3, candidates, baseTargetGames, 260, 14)
+  }
+  if (!base || !base.schedule.length) return null
+
+  var repeated = []
+  for (var round = 0; round < rounds; round += 1) {
+    base.schedule.forEach(function (match) {
+      repeated.push({
+        a: match.a,
+        b: match.b,
+        players: match.players,
+        key: match.key,
+        typeKey: match.typeKey,
+        baseCost: match.baseCost,
+        index: repeated.length + 1
+      })
+    })
+  }
+
+  return {
+    schedule: repeated,
+    penalty: schedulePenalty(repeated, players, repeatLimit)
+  }
+}
+
 function schedulePenalty(schedule, players, repeatLimit) {
   var history = {}
   var partnerUse = {}
   var matchUse = {}
   var matchTypeUse = {}
+  var gameCounts = {}
   players.forEach(function (p) { history[p.id] = [] })
+  players.forEach(function (p) { gameCounts[p.id] = 0 })
 
   schedule.forEach(function (match) {
     var playing = {}
     match.players.forEach(function (p) { playing[p.id] = true })
     players.forEach(function (p) {
       history[p.id].push(playing[p.id] ? 'P' : 'R')
+      if (playing[p.id]) gameCounts[p.id] += 1
     })
     ;[match.a, match.b].forEach(function (team) {
       var key = pairKey(team[0], team[1])
@@ -252,6 +433,12 @@ function schedulePenalty(schedule, players, repeatLimit) {
     var count = matchTypeUse[key]
     penalty += count * count * 8
   })
+  var targetGames = getTargetGames(players, schedule.length)
+  if (targetGames !== null) {
+    Object.keys(gameCounts).forEach(function (id) {
+      penalty += Math.pow(gameCounts[id] - targetGames, 2) * 100000
+    })
+  }
 
   return penalty
 }
@@ -260,13 +447,16 @@ function collectWarnings(schedule, players, repeatLimit) {
   var history = {}
   var partnerUse = {}
   var matchUse = {}
+  var gameCounts = {}
   players.forEach(function (p) { history[p.id] = [] })
+  players.forEach(function (p) { gameCounts[p.id] = 0 })
 
   schedule.forEach(function (match) {
     var playing = {}
     match.players.forEach(function (p) { playing[p.id] = true })
     players.forEach(function (p) {
       history[p.id].push(playing[p.id] ? 'P' : 'R')
+      if (playing[p.id]) gameCounts[p.id] += 1
     })
     ;[match.a, match.b].forEach(function (team) {
       var key = pairKey(team[0], team[1])
@@ -297,7 +487,51 @@ function collectWarnings(schedule, players, repeatLimit) {
   })
   if (hasExcess) warnings.push('个别完整对阵超过 ' + repeatLimit + ' 次')
 
+  var targetGames = getTargetGames(players, schedule.length)
+  if (targetGames !== null) {
+    var hasUnevenGames = Object.keys(gameCounts).some(function (id) {
+      return gameCounts[id] !== targetGames
+    })
+    if (hasUnevenGames) warnings.push('有人场次数不均等')
+  }
+
+  var maxLevelDiff = 0
+  schedule.forEach(function (match) {
+    maxLevelDiff = Math.max(maxLevelDiff, matchLevelDiff(match))
+  })
+  if (maxLevelDiff > 2) warnings.push('个别场次实力差超过 2 级')
+
   return warnings
+}
+
+function tryGenerateQuotaSchedule(players, matchCount, repeatLimit, candidates, targetGames) {
+  var best = null
+
+  if (players.length === 7 && matchCount > players.length && matchCount % players.length === 0) {
+    best = repeatBaseQuotaSchedule(players, matchCount, repeatLimit, candidates)
+  }
+  if (best) return best
+
+  best = generateWithQuota(players, matchCount, repeatLimit, candidates, targetGames)
+  if (!best) {
+    best = generateWithQuota(players, matchCount, repeatLimit, candidates, targetGames, 120, 10)
+  }
+  if (!best && repeatLimit < 2) {
+    best = generateWithQuota(players, matchCount, 2, candidates, targetGames)
+    if (!best) best = generateWithQuota(players, matchCount, 2, candidates, targetGames, 120, 10)
+  }
+  if (!best && repeatLimit < 3) {
+    best = generateWithQuota(players, matchCount, 3, candidates, targetGames)
+    if (!best) best = generateWithQuota(players, matchCount, 3, candidates, targetGames, 120, 10)
+  }
+  if (!best) {
+    best = generateWithQuota(players, matchCount, Math.max(repeatLimit, 2), candidates, targetGames, 260, 14)
+  }
+  if (!best) {
+    best = repeatBaseQuotaSchedule(players, matchCount, repeatLimit, candidates)
+  }
+
+  return best
 }
 
 function generate(players, matchCount, repeatLimit) {
@@ -308,6 +542,30 @@ function generate(players, matchCount, repeatLimit) {
 
   var best = null
   var attempts = Math.max(160, Math.min(900, matchCount * 70))
+  var targetGames = getTargetGames(players, matchCount)
+
+  if (targetGames !== null) {
+    var levelDiffLimits = [1, 1.5, 2]
+    for (var limitIndex = 0; limitIndex < levelDiffLimits.length; limitIndex += 1) {
+      var limitedCandidates = filterCandidatesByLevelDiff(candidates, levelDiffLimits[limitIndex])
+      if (!limitedCandidates.length) continue
+      best = tryGenerateQuotaSchedule(players, matchCount, repeatLimit, limitedCandidates, targetGames)
+      if (best) break
+    }
+    if (best) {
+      var repeatedWarnings = collectWarnings(best.schedule, players, repeatLimit)
+      return {
+        schedule: best.schedule,
+        note: repeatedWarnings.length
+          ? '已生成，并已保证每个人 ' + targetGames + ' 场；但存在无法完全避免的情况：' + repeatedWarnings.join('；') + '。'
+          : '已生成一版满足主要限制的赛程，每个人 ' + targetGames + ' 场。'
+      }
+    }
+    return { schedule: [], note: '当前人员和场次数下无法在实力差不超过 2 级的前提下生成均等赛程，请调整人员、等级或场数。' }
+  }
+
+  var balancedCandidates = filterCandidatesByLevelDiff(candidates, 2)
+  if (balancedCandidates.length) candidates = balancedCandidates
 
   for (var attempt = 0; attempt < attempts; attempt += 1) {
     var stats = createInitialStats(players)
@@ -316,14 +574,20 @@ function generate(players, matchCount, repeatLimit) {
     var schedule = []
 
     for (var i = 0; i < matchCount; i += 1) {
+      var remainingAfter = matchCount - i - 1
       var ranked = candidates
+        .filter(function (match) {
+          return isFeasibleByQuota(match, stats, players, remainingAfter, targetGames)
+        })
         .map(function (match) {
           return {
             match: match,
-            cost: scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, i, matchCount, players.length, repeatLimit)
+            cost: scoreCandidate(match, stats, selectedCounts, selectedTypeCounts, i, matchCount, players.length, repeatLimit, targetGames)
           }
         })
         .sort(function (x, y) { return x.cost - y.cost })
+
+      if (!ranked.length) break
 
       var pickIndex = Math.min(ranked.length - 1, Math.floor(Math.random() * 3))
       var chosen = ranked[pickIndex].match
@@ -342,10 +606,16 @@ function generate(players, matchCount, repeatLimit) {
       applyMatchToStats(chosen, stats, players)
     }
 
+    if (schedule.length !== matchCount) continue
+
     var penalty = schedulePenalty(schedule, players, repeatLimit)
     if (!best || penalty < best.penalty) {
       best = { schedule: schedule, penalty: penalty }
     }
+  }
+
+  if (!best) {
+    return { schedule: [], note: '当前人员和场次数下无法生成每个人场次数相同的赛程，请调整人员或场数。' }
   }
 
   var hardWarnings = collectWarnings(best.schedule, players, repeatLimit)

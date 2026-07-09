@@ -51,6 +51,48 @@ function applyNestedUpdate(target, updates) {
   }
 }
 
+function mergeScores(existing, incoming) {
+  if (!incoming || typeof incoming !== 'object') return
+
+  if (!existing.scores || typeof existing.scores !== 'object') {
+    existing.scores = {}
+  }
+
+  if (Object.keys(incoming).length === 0) {
+    existing.scores = {}
+    return
+  }
+
+  for (const idx of Object.keys(incoming)) {
+    if (idx.endsWith('_ts')) continue
+
+    if (incoming[idx] === null) {
+      delete existing.scores[idx]
+      delete existing.scores[idx + '_ts']
+    } else if (typeof incoming[idx] === 'object' && incoming[idx] !== null) {
+      const incomingTs = incoming[idx + '_ts'] || {}
+      const existingScore = existing.scores[idx] && typeof existing.scores[idx] === 'object'
+        ? existing.scores[idx]
+        : {}
+      const existingTs = existing.scores[idx + '_ts'] || {}
+
+      for (const field of Object.keys(incoming[idx])) {
+        const newTs = incomingTs[field] || 0
+        const oldTs = existingTs[field] || 0
+        if (newTs >= oldTs) {
+          existingScore[field] = incoming[idx][field] || ''
+          existingTs[field] = newTs
+        }
+      }
+
+      existing.scores[idx] = existingScore
+      existing.scores[idx + '_ts'] = existingTs
+    } else {
+      existing.scores[idx] = incoming[idx]
+    }
+  }
+}
+
 async function handleGet(request, env) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
@@ -95,40 +137,23 @@ async function handlePut(request, env) {
 
   const body = await request.json()
 
-  // 检查是否包含嵌套路径更新（如 scores.0.a）
-  const hasNestedPaths = Object.keys(body).some(k => k.includes('.'))
-  if (hasNestedPaths) {
-    applyNestedUpdate(existing, body)
-  } else {
-    // 顶层字段合并
-    // scores 支持逐场次逐字段合并，带时间戳防旧数据覆盖新数据
-    if (body.scores && existing.scores && typeof body.scores === 'object' && typeof existing.scores === 'object') {
-      for (const idx of Object.keys(body.scores)) {
-        if (body.scores[idx] === null) {
-          delete existing.scores[idx]
-          delete existing.scores[idx + '_ts']
-        } else if (typeof body.scores[idx] === 'object' && typeof existing.scores[idx] === 'object') {
-          // 逐字段合并，只覆盖请求中明确带的字段
-          var incomingTs = body.scores[idx + '_ts'] || {}
-          var existingTs = existing.scores[idx + '_ts'] || {}
-          for (const field of Object.keys(body.scores[idx])) {
-            if (field === '_ts') continue
-            var newTs = incomingTs[field] || 0
-            var oldTs = existingTs[field] || 0
-            if (newTs >= oldTs) {
-              existing.scores[idx][field] = body.scores[idx][field] || ''
-              existingTs[field] = newTs
-            }
-          }
-          existing.scores[idx + '_ts'] = existingTs
-        } else {
-          existing.scores[idx] = body.scores[idx]
-        }
-      }
-      delete body.scores
-    }
-    Object.assign(existing, body)
+  const nestedUpdates = {}
+  const topLevelUpdates = {}
+  for (const key of Object.keys(body)) {
+    if (key.includes('.')) nestedUpdates[key] = body[key]
+    else topLevelUpdates[key] = body[key]
   }
+
+  if (Object.keys(nestedUpdates).length) {
+    applyNestedUpdate(existing, nestedUpdates)
+  }
+
+  if (Object.prototype.hasOwnProperty.call(topLevelUpdates, 'scores')) {
+    mergeScores(existing, topLevelUpdates.scores)
+    delete topLevelUpdates.scores
+  }
+
+  Object.assign(existing, topLevelUpdates)
 
   await env.ROOMS.put(`room:${code}`, JSON.stringify(existing))
   return json(existing)

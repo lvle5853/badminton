@@ -27,7 +27,6 @@
     "showShadowRootInWxmlPanel": true,
     "packNpmManually": true,
     "packNpmRelationList": [],
-    "packNpmRelationList": [],
     "minifyWXSS": true,
     "showES6CompileOption": false,
     "minifyWXML": true,

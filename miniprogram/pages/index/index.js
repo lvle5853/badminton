@@ -11,12 +11,28 @@ const LEVEL_OPTIONS = [
 const LEVEL_VALUES = [
   1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9
 ]
-const MATCH_COUNT_OPTIONS = []
-for (var i = 1; i <= 30; i++) MATCH_COUNT_OPTIONS.push(i + '场')
 const REPEAT_LIMIT_OPTIONS = ['1次', '2次']
 const REPEAT_LIMIT_VALUES = [1, 2]
 
 var lastPlayersHash = ''
+
+function buildMatchCountValues(playerCount) {
+  var values = []
+  for (var i = 1; i <= 30; i += 1) {
+    if (playerCount >= 4 && (i * 4) % playerCount !== 0) continue
+    values.push(i)
+  }
+  return values
+}
+
+function nearestMatchCount(values, current) {
+  if (values.indexOf(current) !== -1) return current
+  var nearest = values[0]
+  for (var i = 1; i < values.length; i += 1) {
+    if (Math.abs(values[i] - current) < Math.abs(nearest - current)) nearest = values[i]
+  }
+  return nearest
+}
 
 Page({
   data: {
@@ -29,9 +45,12 @@ Page({
     repeatLimitIndex: 0,
     GENDER_OPTIONS: GENDER_OPTIONS,
     LEVEL_OPTIONS: LEVEL_OPTIONS,
-    MATCH_COUNT_OPTIONS: MATCH_COUNT_OPTIONS,
+    MATCH_COUNT_OPTIONS: [],
+    MATCH_COUNT_VALUES: [],
     REPEAT_LIMIT_OPTIONS: REPEAT_LIMIT_OPTIONS,
     roomCode: '',
+    isAdmin: true,
+    isGenerating: false,
     joinCodeInput: ''
   },
 
@@ -46,7 +65,15 @@ Page({
 
   refreshList() {
     var players = app.globalData.players
-    var hash = JSON.stringify(players) + app.globalData.roomCode
+    var values = buildMatchCountValues(players.length)
+    var currentMatchCount = app.globalData.settings.matchCount
+    if (values.length && values.indexOf(currentMatchCount) === -1) {
+      currentMatchCount = nearestMatchCount(values, currentMatchCount)
+      app.globalData.settings.matchCount = currentMatchCount
+      app.saveState()
+      app.syncRoomSettings()
+    }
+    var hash = JSON.stringify(players) + app.globalData.roomCode + currentMatchCount
     if (hash === lastPlayersHash) return
     lastPlayersHash = hash
 
@@ -56,43 +83,23 @@ Page({
           id: p.id,
           name: p.name,
           genderLabel: schedule.genderLabel(p.gender),
+          genderClass: p.gender === 'M' ? 'gender-male' : 'gender-female',
           levelLabel: schedule.formatLevel(p.level) + '级'
         }
       }),
       playerCount: players.length,
-      matchCountIndex: app.globalData.settings.matchCount - 1,
+      MATCH_COUNT_OPTIONS: values.map(function (v) { return v + '场' }),
+      MATCH_COUNT_VALUES: values,
+      matchCountIndex: Math.max(0, values.indexOf(currentMatchCount)),
       repeatLimitIndex: REPEAT_LIMIT_VALUES.indexOf(app.globalData.settings.repeatLimit),
-      roomCode: app.globalData.roomCode || ''
+      roomCode: app.globalData.roomCode || '',
+      isAdmin: app.globalData.isAdmin
     })
   },
 
   // --- Room management ---
 
-  onCreateRoom() {
-    if (!app.isCloudAvailable()) {
-      wx.showModal({
-        title: '提示',
-        content: '请先在开发者工具中开通云开发，然后重新编译项目。',
-        showCancel: false
-      })
-      return
-    }
-    wx.showLoading({ title: '创建中...' })
-    app.createRoom(function (ok, info) {
-      wx.hideLoading()
-      if (ok) {
-        wx.showModal({
-          title: '房间已创建',
-          content: '房间号：' + info + '\n\n分享给朋友，输入房间号即可加入',
-          showCancel: false
-        })
-      } else {
-        wx.showToast({ title: info, icon: 'none' })
-      }
-    })
-  },
-
-  onJoinRoom() {
+  onEnterRoom() {
     if (!app.isCloudAvailable()) {
       wx.showModal({
         title: '提示',
@@ -106,11 +113,19 @@ Page({
       wx.showToast({ title: '请输入房间号', icon: 'none' })
       return
     }
-    wx.showLoading({ title: '加入中...' })
-    app.joinRoom(code, function (ok, info) {
+    wx.showLoading({ title: '进入中...' })
+    app.createOrJoinRoom(code, function (ok, info, action) {
       wx.hideLoading()
       if (ok) {
-        wx.showToast({ title: '已加入房间', icon: 'success' })
+        if (action === 'created') {
+          wx.showModal({
+            title: '房间已创建',
+            content: '房间号：' + info + '\n\n你是管理员，可以管理人员和赛程。',
+            showCancel: false
+          })
+        } else {
+          wx.showToast({ title: '已加入房间', icon: 'success' })
+        }
       } else {
         wx.showToast({ title: info, icon: 'none' })
       }
@@ -157,20 +172,27 @@ Page({
   },
 
   onMatchCountChange(e) {
+    if (!this._ensureAdmin()) return
     var idx = Number(e.detail.value)
-    app.globalData.settings.matchCount = idx + 1
+    var value = this.data.MATCH_COUNT_VALUES[idx]
+    if (!value) return
+    app.globalData.settings.matchCount = value
     app.saveState()
+    app.syncRoomSettings()
     this.setData({ matchCountIndex: idx })
   },
 
   onRepeatLimitChange(e) {
+    if (!this._ensureAdmin()) return
     var idx = Number(e.detail.value)
     app.globalData.settings.repeatLimit = REPEAT_LIMIT_VALUES[idx]
     app.saveState()
+    app.syncRoomSettings()
     this.setData({ repeatLimitIndex: idx })
   },
 
   addPlayer() {
+    if (!this._ensureAdmin()) return
     var name = this.data.nameInput.trim()
     var level = LEVEL_VALUES[this.data.levelIndex]
     if (!name) {
@@ -190,21 +212,27 @@ Page({
     })
     app.globalData.schedule = []
     app.globalData.scores = {}
+    app.globalData._scoreTs = {}
     app.saveState()
+    app.syncRoomState()
     this.setData({ nameInput: '' })
     this.refreshList()
   },
 
   removePlayer(e) {
+    if (!this._ensureAdmin()) return
     var id = e.currentTarget.dataset.id
     app.globalData.players = app.globalData.players.filter(function (p) { return p.id !== id })
     app.globalData.schedule = []
     app.globalData.scores = {}
+    app.globalData._scoreTs = {}
     app.saveState()
+    app.syncRoomState()
     this.refreshList()
   },
 
   loadSample() {
+    if (!this._ensureAdmin()) return
     app.globalData.players = [
       { id: schedule.uid(), name: '阿杰', gender: 'M', level: 4 },
       { id: schedule.uid(), name: '小林', gender: 'M', level: 4 },
@@ -215,20 +243,40 @@ Page({
     ]
     app.globalData.schedule = []
     app.globalData.scores = {}
+    app.globalData._scoreTs = {}
     app.saveState()
+    app.syncRoomState()
     this.refreshList()
     wx.showToast({ title: '已填入 6 人示例', icon: 'none' })
   },
 
   generateSchedule() {
-    var result = app.generateSchedule()
-    if (!result.success) {
-      wx.showToast({ title: result.note, icon: 'none' })
-      return
-    }
-    wx.showToast({ title: '赛程已生成', icon: 'success' })
+    if (!this._ensureAdmin()) return
+    if (this.data.isGenerating) return
+
+    var that = this
+    this.setData({ isGenerating: true })
+    wx.showLoading({ title: '生成中...' })
+
     setTimeout(function () {
-      wx.switchTab({ url: '/pages/schedule/schedule' })
-    }, 800)
+      var result = app.generateSchedule()
+      wx.hideLoading()
+      that.setData({ isGenerating: false })
+
+      if (!result.success) {
+        wx.showToast({ title: result.note, icon: 'none' })
+        return
+      }
+      wx.showToast({ title: '赛程已生成', icon: 'success' })
+      setTimeout(function () {
+        wx.switchTab({ url: '/pages/schedule/schedule' })
+      }, 800)
+    }, 50)
+  },
+
+  _ensureAdmin() {
+    if (!app.globalData.roomCode || app.globalData.isAdmin) return true
+    wx.showToast({ title: '仅管理员可以修改', icon: 'none' })
+    return false
   }
 })

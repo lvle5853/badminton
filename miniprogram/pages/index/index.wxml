@@ -8,26 +8,25 @@
   <!-- Room Panel -->
   <view wx:if="{{!roomCode}}" class="card room-card">
     <view class="section-title">多人同步</view>
-    <text class="room-hint">创建房间后分享房间号，朋友输入房间号加入即可实时同步比分</text>
+    <text class="room-hint">输入房间号进入；房间不存在会自动创建，你将成为管理员</text>
     <view class="room-row">
-      <input class="form-input room-input" placeholder="输入房间号加入" type="number" maxlength="4"
-        value="{{joinCodeInput}}" bindinput="onJoinCodeInput" bindconfirm="onJoinRoom" />
-      <button class="btn-join" bindtap="onJoinRoom">加入</button>
+      <input class="form-input room-input" placeholder="输入房间号" type="number" maxlength="4"
+        value="{{joinCodeInput}}" bindinput="onJoinCodeInput" bindconfirm="onEnterRoom" />
+      <button class="btn-join" bindtap="onEnterRoom">进入</button>
     </view>
-    <button class="btn-create" bindtap="onCreateRoom">创建房间</button>
   </view>
 
   <view wx:if="{{roomCode}}" class="room-bar">
     <view class="room-bar-left">
       <text class="room-bar-label">房间</text>
       <text class="room-bar-code" bindtap="onCopyCode">{{roomCode}}</text>
-      <text class="room-bar-tip">（点击复制）</text>
+      <text class="room-bar-tip">{{isAdmin ? '管理员' : '成员'}}（点击复制）</text>
     </view>
     <text class="room-bar-leave" bindtap="onLeaveRoom">离开</text>
   </view>
 
   <!-- Add Player Form -->
-  <view class="card">
+  <view wx:if="{{!roomCode || isAdmin}}" class="card">
     <view class="section-title">添加人员</view>
     <view class="form-grid">
       <input class="form-input" placeholder="姓名" maxlength="12"
@@ -63,15 +62,15 @@
     <view wx:for="{{players}}" wx:key="id" class="player-row" wx:if="{{playerCount > 0}}">
       <view class="player-info">
         <text class="player-name">{{item.name}}</text>
-        <text class="badge">{{item.genderLabel}}</text>
+        <text class="badge {{item.genderClass}}">{{item.genderLabel}}</text>
         <text class="badge">{{item.levelLabel}}</text>
       </view>
-      <button class="btn-danger-sm" data-id="{{item.id}}" bindtap="removePlayer">×</button>
+      <button wx:if="{{!roomCode || isAdmin}}" class="btn-danger-sm" data-id="{{item.id}}" bindtap="removePlayer">×</button>
     </view>
   </view>
 
   <!-- Settings -->
-  <view class="card">
+  <view wx:if="{{!roomCode || isAdmin}}" class="card">
     <view class="section-title">赛程设置</view>
     <view class="settings-grid">
       <view class="setting-item">
@@ -87,9 +86,12 @@
         </picker>
       </view>
     </view>
-    <button class="btn-primary" style="margin-top:24rpx" bindtap="generateSchedule">生成赛程</button>
+    <button class="btn-primary" style="margin-top:24rpx" bindtap="generateSchedule"
+      loading="{{isGenerating}}" disabled="{{isGenerating}}">
+      {{isGenerating ? '生成中...' : '生成赛程'}}
+    </button>
   </view>
 
   <!-- Sample Data -->
-  <button class="btn-secondary" style="margin-top:0" bindtap="loadSample">填入示例数据</button>
+  <button wx:if="{{!roomCode || isAdmin}}" class="btn-secondary" style="margin-top:0" bindtap="loadSample">填入示例数据</button>
 </view>

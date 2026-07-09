@@ -1,6 +1,16 @@
 <view class="page">
+  <view wx:if="{{hasFilter}}" class="active-filter-bar">
+    <view class="active-filter-list">
+      <view wx:for="{{selectedFilters}}" wx:key="id" class="active-filter-item {{item.genderClass}}">
+        <text class="active-filter-name">{{item.name}}</text>
+        <text class="active-filter-level">{{item.level}}</text>
+      </view>
+    </view>
+    <button class="btn-secondary-sm" bindtap="clearPlayerFilter">显示全部</button>
+  </view>
+
   <view wx:if="{{matches.length === 0}}" class="empty-state">
-    <text>添加人员后生成赛程</text>
+    <text>{{emptyText}}</text>
   </view>
 
   <block wx:for="{{matches}}" wx:key="index">
@@ -14,14 +24,16 @@
       <!-- Match Body -->
       <view class="match-body">
         <view class="team team-left">
-          <view class="team-player" wx:for="{{item.teamA}}" wx:key="name">
+          <view class="team-player {{item.genderClass}} {{item.selected ? 'is-selected' : ''}}"
+            wx:for="{{item.teamA}}" wx:key="id" data-id="{{item.id}}" bindtap="togglePlayerFilter">
             <text class="team-name">{{item.name}}</text>
             <text class="team-level">{{item.level}}</text>
           </view>
         </view>
         <text class="versus">VS</text>
         <view class="team team-right">
-          <view class="team-player" wx:for="{{item.teamB}}" wx:key="name">
+          <view class="team-player {{item.genderClass}} {{item.selected ? 'is-selected' : ''}}"
+            wx:for="{{item.teamB}}" wx:key="id" data-id="{{item.id}}" bindtap="togglePlayerFilter">
             <text class="team-name">{{item.name}}</text>
             <text class="team-level">{{item.level}}</text>
           </view>
@@ -32,10 +44,10 @@
       <view class="score-row">
         <input class="score-input" type="number" placeholder="左队"
           value="{{item.scoreA}}" data-index="{{item.index}}" data-side="a"
-          bindinput="onScoreInput" />
+          bindinput="onScoreInput" bindblur="onScoreBlur" />
         <input class="score-input" type="number" placeholder="右队"
           value="{{item.scoreB}}" data-index="{{item.index}}" data-side="b"
-          bindinput="onScoreInput" />
+          bindinput="onScoreInput" bindblur="onScoreBlur" />
         <button class="btn-clear" data-index="{{item.index}}" bindtap="clearScore">清空</button>
       </view>
     </view>
